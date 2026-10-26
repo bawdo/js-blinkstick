@@ -29,11 +29,24 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
+      # The same checks as a local `npm run verify` and the release build.
+      - run: npm run verify
+
+  # Installs the packed tarball into a scratch project and imports every
+  # entry, catching a package that builds and lints but will not load.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # npm pack has no prepack hook here, so build dist before the smoke
+      # script packs it.
       - run: npm run build
-      - run: npm run check:package
-      - run: npm run check:bundle
-      - run: npm run check:types
-      - run: node scripts/check-declarations.mjs
+      - run: sh scripts/smoke-pack.sh

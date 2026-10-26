@@ -60,7 +60,8 @@
     "check:package": "publint && attw --pack --profile esm-only",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:types": "tsc -p test/types/node-consumer && tsc -p test/types/browser-consumer && tsc -p test/types/browser-consumer-no-types && node scripts/check-declarations.mjs",
-    "test:browser": "vite test-page"
+    "test:browser": "vite test-page",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run check:package && npm run check:bundle && npm run check:types"
   },
   "peerDependencies": {
     "node-hid": "^3.4.0"
