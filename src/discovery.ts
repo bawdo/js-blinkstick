@@ -39,6 +39,8 @@ export interface Previous<H> {
   key?: string;
   knownName?: string;
   model: Model;
+  /** The hint the stick was opened with, so a hinted model can match again. */
+  hint?: Model;
 }
 
 const HINTS: readonly Model[] = ["nano", "square"];
@@ -141,15 +143,15 @@ export async function wrapHandle<H, I extends BlinkStickInfo>(
 ): Promise<BlinkStick<I>> {
   const info = p.toInfo(identity, hint);
   const transport = await p.backend.open(handle);
-  return build(p, handle, identity, info, transport, undefined);
+  return build(p, handle, identity, info, transport, undefined, hint);
 }
 
 /**
  * Picks the candidate that replaces a lost stick, or undefined if none does.
  * With a platform key it matches by key only. Without one it tries the same
- * handle, then the one stick named `knownName`, then the one stick of the
- * same model. Names are read only for the second fallback, and only when a
- * name is known.
+ * handle, then, if a name is known, the one stick of the same model with that
+ * name and nothing else. Only with no known name does it fall back to the one
+ * stick of the same model. Names are read only when a name is known.
  */
 export async function findReplacement<H>(
   candidates: Candidate<H>[],
@@ -164,18 +166,39 @@ export async function findReplacement<H>(
   }
   const same = candidates.find((c) => c.handle === previous.handle);
   if (same) return same.handle;
+  const sameModel = candidates.filter((c) =>
+    isModel(p, c.identity, previous.model, previous.hint),
+  );
   const { knownName } = previous;
   if (knownName !== undefined && knownName !== "") {
     const named: H[] = [];
-    for (const c of candidates) {
+    for (const c of sameModel) {
       if ((await readName(c.handle)) === knownName) named.push(c.handle);
     }
-    if (named.length === 1) return named[0];
+    return named.length === 1 ? named[0] : undefined;
   }
-  const sameModel = candidates.filter(
-    (c) => p.toInfo(c.identity).model === previous.model,
-  );
   return sameModel.length === 1 ? sameModel[0]?.handle : undefined;
+}
+
+/** Whether `identity` detects as `model`, with `hint` applied as on open. */
+function isModel<H>(
+  p: Platform<H, BlinkStickInfo>,
+  identity: Identity,
+  model: Model,
+  hint: Model | undefined,
+): boolean {
+  try {
+    return p.toInfo(identity, hint).model === model;
+  } catch (error) {
+    // A hint that conflicts with detection means another model.
+    if (
+      error instanceof BlinkStickError &&
+      error.code === "UNSUPPORTED_MODEL"
+    ) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /** Go's OpenName loop: reads every openable stick's name, keeps the match. */
@@ -244,7 +267,15 @@ async function openByName<H, I extends BlinkStickInfo>(
     await closeQuietly(transport);
     throw error;
   }
-  return build(p, candidate.handle, candidate.identity, info, transport, name);
+  return build(
+    p,
+    candidate.handle,
+    candidate.identity,
+    info,
+    transport,
+    name,
+    hint,
+  );
 }
 
 /**
@@ -258,6 +289,7 @@ async function build<H, I extends BlinkStickInfo>(
   info: I,
   transport: Transport,
   knownName: string | undefined,
+  hint: Model | undefined,
 ): Promise<BlinkStick<I>> {
   if (info.model === "unknown") {
     await closeQuietly(transport);
@@ -277,6 +309,7 @@ async function build<H, I extends BlinkStickInfo>(
         ...(key === undefined ? {} : { key }),
         ...(name === undefined ? {} : { knownName: name }),
         model: info.model,
+        ...(hint === undefined ? {} : { hint }),
       },
       p,
       (h) => readNameOf(p, candidates, h),

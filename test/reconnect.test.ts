@@ -285,6 +285,92 @@ describe("reconnect without a key", () => {
     expect(transports.flex.gets).toBe(0);
   });
 
+  test("no key: a remembered name with no match rejects DISCONNECTED", async () => {
+    const { backend, first, second } = twoNanos();
+    nameStick(first, "shelf");
+    nameStick(second, "desk");
+    const stick = await openStick(descriptorPlatform(backend), {
+      name: "desk",
+    });
+    const shelfSends = first.sendCount();
+    // Desk disappears from the listing, leaving shelf as the only Nano.
+    backend.unplug(1);
+    backend.devices.splice(1, 1);
+    const error = await rejection(stick.setAll(RED));
+    expect(error.code).toBe("DISCONNECTED");
+    expect(first.sendCount()).toBe(shelfSends);
+  });
+
+  test("no key: a remembered name on two sticks rejects DISCONNECTED", async () => {
+    const transports = [0, 1, 2].map(() => new FakeTransport());
+    for (const t of transports) nameStick(t, "desk");
+    const backend = new FakeBackend(
+      transports.map((transport) => ({
+        identity: { ...browserNano },
+        transport,
+      })),
+    );
+    const stick = await openStick(descriptorPlatform(backend), {
+      match: (i) => i === backend.devices[2]?.identity,
+    });
+    expect(await stick.getName()).toBe("desk");
+    backend.unplug(2);
+    backend.devices.splice(2, 1);
+    const error = await rejection(stick.setAll(RED));
+    expect(error.code).toBe("DISCONNECTED");
+    expect(transports[0]?.sendCount()).toBe(0);
+    expect(transports[1]?.sendCount()).toBe(0);
+  });
+
+  test("no key: a same-named stick of another model is not read or chosen", async () => {
+    const nano = new FakeTransport();
+    const square = new FakeTransport();
+    nameStick(nano, "desk");
+    nameStick(square, "desk");
+    const backend = new FakeBackend([
+      { identity: { ...browserNano }, transport: nano },
+      {
+        identity: {
+          product: "BlinkStick",
+          manufacturer: "Agile Innovative Ltd",
+          featureReportIds: [1, 2, 3, 10],
+        },
+        transport: square,
+      },
+    ]);
+    const stick = await openStick(descriptorPlatform(backend), {
+      match: (i) => i === backend.devices[0]?.identity,
+    });
+    await stick.getName();
+    backend.unplug(0);
+    backend.devices.splice(0, 1);
+    const error = await rejection(stick.setAll(RED));
+    expect(error.code).toBe("DISCONNECTED");
+    expect(square.gets).toBe(0);
+    expect(square.sendCount()).toBe(0);
+  });
+
+  test("no key: a hinted stick reconnects as the only stick of its model", async () => {
+    const backend = new FakeBackend([
+      {
+        identity: {
+          product: "BlinkStick",
+          manufacturer: "Agile Innovative Ltd",
+          featureReportIds: [1, 2, 3],
+        },
+      },
+      { identity: { ...browserNano } },
+    ]);
+    const stick = await openStick(descriptorPlatform(backend), {
+      hint: "square",
+    });
+    expect(stick.info.model).toBe("square");
+    backend.unplug(0);
+    const next = backend.replug(0, { newHandle: true });
+    await stick.setAll(RED);
+    expect(next.frame(8)).toEqual(fill(8, RED));
+  });
+
   test("no key: two sticks of the same model and no name rejects DISCONNECTED", async () => {
     const { backend, second } = twoNanos();
     const stick = await openStick(descriptorPlatform(backend));
