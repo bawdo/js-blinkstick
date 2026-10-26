@@ -40,7 +40,12 @@ const TRANSFER_ATTEMPTS = 3;
 export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   readonly info: I;
   readonly ledCount: number;
-  /** Flips every channel written from now on to 255 - v, after the brightness limit. */
+  /**
+   * Flips every channel written from now on to 255 - v, after the brightness
+   * limit, for LEDs wired so that 255 means off. Reads flip back, so they return
+   * what was written. It does not repaint the LEDs, so set it before setting
+   * them.
+   */
   inverted: boolean = false;
 
   #brightnessLimit = 255;
@@ -99,7 +104,9 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   /** Sets every LED to `color`. */
   async setAll(color: Color): Promise<void> {
     assertColor(color);
-    return this.#writeFrame(Array.from({ length: this.ledCount }, () => color));
+    return this.#writeFrame(
+      Array.from({ length: this.ledCount }, () => this.#scaled(color)),
+    );
   }
 
   /** Turns every LED off. */
@@ -118,7 +125,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
       );
     }
     for (const c of colors) assertColor(c);
-    return this.#writeFrame(colors);
+    return this.#writeFrame(colors.map((c) => this.#scaled(c)));
   }
 
   /**
@@ -127,7 +134,8 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
    * `inverted` on they are flipped back.
    */
   async getFrame(): Promise<Color[]> {
-    return this.#run(() => this.#readFrame());
+    const inverted = this.inverted;
+    return this.#run(() => this.#readFrame(inverted));
   }
 
   /** Reads LED `index` back from the stick, as `getFrame` does. */
@@ -145,13 +153,14 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   async setLed(index: number, color: Color): Promise<void> {
     assertIndex(index, this.ledCount);
     assertColor(color);
+    const scaled = this.#scaled(color);
+    const inverted = this.inverted;
     return this.#run(async () => {
       if (this.#lastFrame === undefined) {
         // Values on the device are already scaled, and reads undo any flip.
-        this.#lastFrame = await this.#readFrame();
+        this.#lastFrame = await this.#readFrame(inverted);
       }
-      const scaled = scale(color, this.#brightnessLimit);
-      const wire = this.inverted ? invert(scaled) : scaled;
+      const wire = inverted ? invert(scaled) : scaled;
       await this.#transfer("send", REPORT.led, (t) =>
         t.sendFeatureReport(REPORT.led, encodeLed(index, wire)),
       );
@@ -168,12 +177,19 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     }
   }
 
-  /** Scales, flips and sends a frame, then remembers it. */
-  #writeFrame(colors: readonly Color[]): Promise<void> {
-    const limit = this.#brightnessLimit;
+  /**
+   * Settings and caller data are captured when a method is called, after
+   * validation, never when its queued task runs. This copies and scales a
+   * validated colour with the brightness limit in force now.
+   */
+  #scaled(color: Color): Color {
+    return scale(color, this.#brightnessLimit);
+  }
+
+  /** Flips (as of this call) and sends a scaled frame, then remembers it. */
+  #writeFrame(scaled: Color[]): Promise<void> {
     const inverted = this.inverted;
     return this.#run(async () => {
-      const scaled = colors.map((c) => scale(c, limit));
       const wire = inverted ? scaled.map(invert) : scaled;
       await this.#transfer("send", REPORT.frame, (t) =>
         t.sendFeatureReport(REPORT.frame, encodeFrame(wire)),
@@ -182,13 +198,13 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     });
   }
 
-  /** Reads report 6. Runs inside the queue. */
-  async #readFrame(): Promise<Color[]> {
+  /** Reads report 6, undoing the flip if `inverted`. Runs inside the queue. */
+  async #readFrame(inverted: boolean): Promise<Color[]> {
     const data = await this.#transfer("get", REPORT.frame, (t) =>
       t.receiveFeatureReport(REPORT.frame, REPORT_LENGTH[6]),
     );
     const frame = decodeFrame(data, this.ledCount);
-    return this.inverted ? frame.map(invert) : frame;
+    return inverted ? frame.map(invert) : frame;
   }
 
   /**

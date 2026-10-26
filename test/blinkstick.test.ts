@@ -311,6 +311,48 @@ describe("BlinkStick", () => {
     });
   });
 
+  test("an unawaited setAll and setLed use the inverted value from call time", async () => {
+    const { stick, ft } = open("nano");
+    const a = stick.setAll({ r: 10, g: 20, b: 30 });
+    const b = stick.setLed(0, { r: 1, g: 2, b: 3 });
+    stick.inverted = true;
+    await Promise.all([a, b]);
+    expect(ft.frame(2)).toEqual([
+      { r: 1, g: 2, b: 3 },
+      { r: 10, g: 20, b: 30 },
+    ]);
+  });
+
+  test("an unawaited getFrame ignores a later change to inverted", async () => {
+    const { stick } = open("nano");
+    await stick.setAll({ r: 10, g: 20, b: 30 });
+    const read = stick.getFrame();
+    stick.inverted = true;
+    expect(await read).toEqual(fill(2, { r: 10, g: 20, b: 30 }));
+  });
+
+  test("an unawaited setAll ignores a later brightnessLimit change", async () => {
+    const { stick, ft } = open("nano");
+    const p = stick.setAll(WHITE);
+    stick.brightnessLimit = 0;
+    await p;
+    expect(ft.frame(2)).toEqual(fill(2, WHITE));
+  });
+
+  test("mutating a setFrame array or colour after the call changes nothing", async () => {
+    const { stick, ft } = open("nano");
+    const c = { r: 5, g: 6, b: 7 };
+    const frame = [c, { r: 1, g: 1, b: 1 }];
+    const p = stick.setFrame(frame);
+    frame[0] = { r: 999, g: 0, b: 0 };
+    c.r = 200;
+    await p;
+    expect(ft.frame(2)).toEqual([
+      { r: 5, g: 6, b: 7 },
+      { r: 1, g: 1, b: 1 },
+    ]);
+  });
+
   test("a failed call does not stop later calls", async () => {
     const { stick, ft } = open("nano");
     ft.fail = 3;
