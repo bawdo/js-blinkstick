@@ -29,9 +29,24 @@ function log(message) {
   console.log(line);
 }
 
+/** Describes an error and its whole cause chain (up to 6 levels), joined with " <- ". */
 function describeError(error) {
-  const code = error?.code ? `${error.code}: ` : "";
-  return `${error?.name ?? "Error"} ${code}${error?.message ?? String(error)}`;
+  const parts = [];
+  let current = error;
+  for (let depth = 0; depth < 6; depth++) {
+    if (current instanceof Error || (current && typeof current === "object")) {
+      const code = current.code ? ` ${current.code}` : "";
+      parts.push(
+        `${current.name ?? "Error"}${code}: ${current.message ?? String(current)}`,
+      );
+      current = current.cause;
+      if (current === undefined || current === null) break;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return parts.join(" <- ");
 }
 
 /** Normalises a colour (any key order) to a fixed r, g, b shape; leaves other values alone. */
