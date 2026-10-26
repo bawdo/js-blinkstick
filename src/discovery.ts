@@ -57,7 +57,7 @@ export function applyModelHint(detected: Model, hint?: Model): Model {
   if (hint === undefined) return detected;
   if (!MODEL_NAMES.some((name) => name === hint)) {
     throw new TypeError(
-      `blinkstick: unknown model hint ${String(hint)}, expected nano or square`,
+      `blinkstick: unknown model hint ${String(hint)}, expected ${MODEL_NAMES.join(" or ")}`,
     );
   }
   if (detected === "unknown") return hint;
@@ -232,6 +232,7 @@ async function openByName<H, I extends BlinkStickInfo>(
     try {
       got = await readName(transport, p.toInfo(c.identity), true);
     } catch (error) {
+      busy++;
       readErrors.push(
         new Error(`blinkstick: reading name of ${describe(c.identity)}`, {
           cause: error,

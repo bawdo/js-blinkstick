@@ -248,6 +248,15 @@ describe("BlinkStick", () => {
       expect(ft.sendCount()).toBe(0);
     });
 
+    test("inverted quotes a string in the error", async () => {
+      const { stick } = open("nano");
+      expect(() => {
+        stick.inverted = "true" as unknown as boolean;
+      }).toThrow(
+        new TypeError('blinkstick: inverted must be a boolean, got "true"'),
+      );
+    });
+
     test("inverseOffByDefault", async () => {
       const { stick, ft } = open("nano");
       await stick.setAll({ r: 255, g: 0, b: 0 });

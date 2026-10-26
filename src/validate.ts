@@ -79,7 +79,7 @@ export function assertInfoBlock(n: unknown): asserts n is 1 | 2 {
 export function assertBoolean(v: unknown, label: string): asserts v is boolean {
   if (typeof v !== "boolean") {
     throw new TypeError(
-      `blinkstick: ${label} must be a boolean, got ${String(v)}`,
+      `blinkstick: ${label} must be a boolean, got ${describe(v)}`,
     );
   }
 }

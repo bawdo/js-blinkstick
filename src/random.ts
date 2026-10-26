@@ -1,4 +1,5 @@
-import { type Color, rgb } from "./color.js";
+import type { Color } from "./color.js";
+import { rgb } from "./color.js";
 
 /** Six segments of 255 steps around the colour wheel. */
 const HUES = 6 * 255;

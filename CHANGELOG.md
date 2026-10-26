@@ -9,9 +9,10 @@ All notable changes to this project are recorded here. The format follows
 ### Changed
 
 - `list({ names: true })` reports a stick whose name cannot be read as `busy`, instead of rejecting the whole listing.
-- `open({ name })` rejecting with NOT_FOUND now says how many sticks were busy and could not be checked.
-- `udev/60-blinkstick.rules` grants access to the hidraw node only, not the raw USB device.
-- The `brightnessLimit` TypeError message quotes string values, as other argument errors do.
+- `open({ name })` rejecting with NOT_FOUND now says how many sticks were busy and could not be checked. Sticks whose name cannot be read count as busy too.
+- `udev/60-blinkstick.rules` grants access to the hidraw node only, not the raw USB device. Linux users who installed the 0.1.0 rule should copy the new file over it, then reload the rules as the README describes.
+- The `brightnessLimit` and `inverted` TypeError messages quote string values, as other argument errors do.
+- `setName` uses `String.prototype.isWellFormed`, so it needs Node 22 (already the floor) or Chrome or Edge 111 or later.
 
 ### Security
 

@@ -15,6 +15,7 @@ You need Node 22 or later.
 
 ```sh
 npm ci
+npm run verify         # everything below in one go
 npm test               # unit tests, no hardware
 npm run lint
 npm run typecheck

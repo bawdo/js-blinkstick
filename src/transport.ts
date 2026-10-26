@@ -62,6 +62,7 @@ export function stripReportId(
   );
 }
 
+/** Closes `transport`, ignoring any error. */
 export async function closeQuietly(transport: Transport): Promise<void> {
   try {
     await transport.close();

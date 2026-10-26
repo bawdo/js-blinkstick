@@ -74,4 +74,19 @@ jobs:
             echo "::error::npm $version is older than 11.5.1, which trusted publishing needs"
             exit 1
           fi
-      - run: npm publish ./*.tgz
+      - name: Publish the expected tarball
+        # Publish exactly the tarball this tag should have produced, so a
+        # stray file in the artifact can never be published instead.
+        run: |
+          file="bawdo-blinkstick-${GITHUB_REF_NAME#v}.tgz"
+          if [ ! -f "$file" ]; then
+            echo "::error::expected $file was not found"
+            exit 1
+          fi
+          for f in ./*.tgz; do
+            if [ "$f" != "./$file" ]; then
+              echo "::error::unexpected tarball $f"
+              exit 1
+            fi
+          done
+          npm publish "./$file"
