@@ -3,6 +3,28 @@
   "version": "0.0.0",
   "description": "Drive BlinkStick Nano and Square from the browser (WebHID) and Node (node-hid).",
   "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./webhid": {
+      "types": "./dist/webhid.d.ts",
+      "default": "./dist/webhid.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "udev",
+    "CAPABILITIES.md",
+    "CHANGELOG.md"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -34,11 +56,13 @@
       "optional": true
     }
   },
+  "dependencies": {
+    "@types/w3c-web-hid": "^1.0.7"
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "^2.6.3",
     "@types/node": "^26.6.5",
-    "@types/w3c-web-hid": "^1.0.7",
     "esbuild": "^0.28.2",
     "node-hid": "^3.4.0",
     "publint": "^0.3.25",

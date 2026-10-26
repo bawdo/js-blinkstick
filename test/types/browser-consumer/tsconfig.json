@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "types": ["w3c-web-hid"],
+    "noEmit": true,
+    "skipLibCheck": false,
+    "paths": {
+      "@bawdo/blinkstick": ["../../../dist/index.d.ts"],
+      "@bawdo/blinkstick/webhid": ["../../../dist/webhid.d.ts"]
+    }
+  },
+  "include": ["index.ts"]
+}
