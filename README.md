@@ -1,5 +1,9 @@
 # @bawdo/blinkstick
 
+[![CI](https://github.com/bawdo/js-blinkstick/actions/workflows/ci.yml/badge.svg)](https://github.com/bawdo/js-blinkstick/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@bawdo/blinkstick)](https://www.npmjs.com/package/@bawdo/blinkstick)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/bawdo/js-blinkstick/badge)](https://scorecard.dev/viewer/?uri=github.com/bawdo/js-blinkstick)
+
 Drive BlinkStick Nano and Square USB LEDs from the browser (WebHID) and from Node (node-hid).
 
 This package is unofficial. It is not made by, or affiliated with, Agile Innovative, the makers
