@@ -9,5 +9,5 @@
 # Then unplug and replug the stick (or reboot). See the README for
 # details.
 
-SUBSYSTEM=="usb", ATTR{idVendor}=="20a0", ATTR{idProduct}=="41e5", TAG+="uaccess"
+# node-hid uses hidraw on Linux, so the raw USB node is not opened up.
 KERNEL=="hidraw*", ATTRS{idVendor}=="20a0", ATTRS{idProduct}=="41e5", TAG+="uaccess"
