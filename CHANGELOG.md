@@ -4,6 +4,19 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-26
+
+### Changed
+
+- `list({ names: true })` reports a stick whose name cannot be read as `busy`, instead of rejecting the whole listing.
+- `open({ name })` rejecting with NOT_FOUND now says how many sticks were busy and could not be checked.
+- `udev/60-blinkstick.rules` grants access to the hidraw node only, not the raw USB device.
+- The `brightnessLimit` TypeError message quotes string values, as other argument errors do.
+
+### Security
+
+- The release workflow builds and verifies the package without a publish credential. Only the publish job, which installs nothing, can mint one.
+
 ## [0.1.0] - 2026-10-26
 
 ### Added
