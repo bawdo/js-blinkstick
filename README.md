@@ -22,10 +22,16 @@ Node 22 or later. Import from `@bawdo/blinkstick/node` or `@bawdo/blinkstick/web
 ```js
 import { open } from "@bawdo/blinkstick/node";
 
-await using stick = await open();
-await stick.setAll({ r: 255, g: 0, b: 0 });
-await stick.pulse({ r: 0, g: 255, b: 0 }, { duration: 1000, iterations: 2 });
+const stick = await open();
+try {
+  await stick.setAll({ r: 255, g: 0, b: 0 });
+  await stick.pulse({ r: 0, g: 255, b: 0 }, { duration: 1000, iterations: 2 });
+} finally {
+  await stick.close();
+}
 ```
+
+`await using stick = await open();` also works on Node 24+ or in TypeScript.
 
 ## Quick start: browser
 
