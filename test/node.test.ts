@@ -1,8 +1,9 @@
 // Never touches real hardware: node-hid is replaced by a fake.
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { BlinkStickError } from "../src/errors.js";
 import {
+  fakeNodeHid,
   nanoDevice,
   resetFake,
   squareDevice,
@@ -15,7 +16,7 @@ vi.mock("node-hid", async () => {
 });
 
 const { list, open } = await import("../src/node.js");
-const { importHid } = await import("../src/node/backend.js");
+const { importHid, setHidImporter } = await import("../src/node/backend.js");
 
 beforeEach(() => resetFake([nanoDevice, squareDevice]));
 
@@ -170,5 +171,42 @@ describe("node-hid missing", () => {
     const hid = { devicesAsync: vi.fn() };
     expect(await importHid(() => Promise.resolve({ default: hid }))).toBe(hid);
     expect(await importHid(() => Promise.resolve(hid))).toBe(hid);
+  });
+
+  describe("through list()", () => {
+    afterEach(() => setHidImporter());
+
+    test("rejects with the install message, then retries", async () => {
+      const missing = Object.assign(new Error("nf"), {
+        code: "ERR_MODULE_NOT_FOUND",
+      });
+      const importer = vi
+        .fn()
+        .mockRejectedValueOnce(missing)
+        .mockResolvedValue(fakeNodeHid);
+      setHidImporter(importer);
+      await expect(list()).rejects.toThrow(
+        "@bawdo/blinkstick/node needs node-hid: npm install node-hid",
+      );
+      expect(await list()).toHaveLength(2);
+      expect(importer).toHaveBeenCalledTimes(2);
+    });
+
+    test("a successful load is cached", async () => {
+      const importer = vi.fn().mockResolvedValue(fakeNodeHid);
+      setHidImporter(importer);
+      await list();
+      await open();
+      expect(importer).toHaveBeenCalledTimes(1);
+    });
+
+    test("open rejects with the install message too", async () => {
+      setHidImporter(() =>
+        Promise.reject(
+          Object.assign(new Error("nf"), { code: "MODULE_NOT_FOUND" }),
+        ),
+      );
+      await expect(open()).rejects.toThrow(/needs node-hid/);
+    });
   });
 });

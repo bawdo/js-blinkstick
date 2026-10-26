@@ -27,10 +27,17 @@ export async function importHid(
 }
 
 let loading: Promise<NodeHid> | undefined;
+let importer: (() => Promise<unknown>) | undefined;
+
+/** Test seam, not exported from the entry: swaps the importer and clears the cache. */
+export function setHidImporter(next?: () => Promise<unknown>): void {
+  importer = next;
+  loading = undefined;
+}
 
 /** Loads node-hid on first use and caches it. A failed load is retried. */
 function loadHid(): Promise<NodeHid> {
-  loading ??= importHid().catch((error: unknown) => {
+  loading ??= importHid(importer).catch((error: unknown) => {
     loading = undefined;
     throw error;
   });
