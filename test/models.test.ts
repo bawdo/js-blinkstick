@@ -4,9 +4,11 @@ import {
   detectFromDescriptor,
   detectFromSerial,
   ledCount,
+  MODEL_NAMES,
   type Mode,
   type Model,
   modeToByte,
+  serialVersion,
   supportsMode,
 } from "../src/models.js";
 
@@ -57,4 +59,24 @@ test("mode names map to bytes 0 to 3", () => {
     expect(byteToMode(i)).toBe(name);
   });
   expect(byteToMode(7)).toBe(7);
+});
+
+describe("serialVersion", () => {
+  test("returns the part after the first dash", () => {
+    expect(serialVersion("BS072777-3.0")).toBe("3.0");
+  });
+
+  test("returns an empty string when there is no dash", () => {
+    expect(serialVersion("nodash")).toBe("");
+  });
+
+  test("keeps any further dashes", () => {
+    expect(serialVersion("A-B-C")).toBe("B-C");
+  });
+});
+
+describe("MODEL_NAMES", () => {
+  test("lists the known models in order", () => {
+    expect(MODEL_NAMES).toEqual(["nano", "square"]);
+  });
 });

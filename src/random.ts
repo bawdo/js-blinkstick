@@ -1,11 +1,7 @@
-import type { Color } from "./color.js";
+import { type Color, rgb } from "./color.js";
 
 /** Six segments of 255 steps around the colour wheel. */
 const HUES = 6 * 255;
-
-function make(r: number, g: number, b: number): Color {
-  return Object.freeze({ r, g, b });
-}
 
 /**
  * Returns a colour with each channel picked at random from 0 to 255. Many
@@ -14,7 +10,7 @@ function make(r: number, g: number, b: number): Color {
  */
 export function randomColor(): Color {
   const ch = (): number => Math.floor(Math.random() * 256);
-  return make(ch(), ch(), ch());
+  return rgb(ch(), ch(), ch());
 }
 
 /**
@@ -34,16 +30,16 @@ export function hue(step: number): Color {
   const x = step % 255;
   switch (Math.floor(step / 255)) {
     case 0:
-      return make(255, x, 0);
+      return rgb(255, x, 0);
     case 1:
-      return make(255 - x, 255, 0);
+      return rgb(255 - x, 255, 0);
     case 2:
-      return make(0, 255, x);
+      return rgb(0, 255, x);
     case 3:
-      return make(0, 255 - x, 255);
+      return rgb(0, 255 - x, 255);
     case 4:
-      return make(x, 0, 255);
+      return rgb(x, 0, 255);
     default:
-      return make(255, 0, 255 - x);
+      return rgb(255, 0, 255 - x);
   }
 }
