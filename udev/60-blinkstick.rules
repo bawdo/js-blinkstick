@@ -1,0 +1,13 @@
+# Grants the logged-in desktop user access to BlinkStick devices, so this
+# package can open them without root or a udev group.
+#
+# Install:
+#   sudo cp udev/60-blinkstick.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#
+# Then unplug and replug the stick (or reboot). See the README for
+# details.
+
+SUBSYSTEM=="usb", ATTR{idVendor}=="20a0", ATTR{idProduct}=="41e5", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="20a0", ATTRS{idProduct}=="41e5", TAG+="uaccess"

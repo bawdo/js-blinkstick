@@ -1,0 +1,88 @@
+{
+  "name": "@bawdo/blinkstick",
+  "version": "0.1.0",
+  "description": "Drive BlinkStick Nano and Square USB LEDs from the browser (WebHID) and Node (node-hid).",
+  "keywords": [
+    "blinkstick",
+    "led",
+    "usb",
+    "hid",
+    "webhid",
+    "node-hid",
+    "nano",
+    "square"
+  ],
+  "homepage": "https://github.com/bawdo/js-blinkstick#readme",
+  "bugs": {
+    "url": "https://github.com/bawdo/js-blinkstick/issues"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./webhid": {
+      "types": "./dist/webhid.d.ts",
+      "default": "./dist/webhid.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "udev",
+    "CAPABILITIES.md",
+    "CHANGELOG.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bawdo/js-blinkstick.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "test:hardware": "BLINKSTICK_HARDWARE=1 vitest run test/hardware",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "check:package": "publint && attw --pack --profile esm-only",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "check:types": "tsc -p test/types/node-consumer && tsc -p test/types/browser-consumer && tsc -p test/types/browser-consumer-no-types && node scripts/check-declarations.mjs",
+    "test:browser": "vite test-page"
+  },
+  "peerDependencies": {
+    "node-hid": "^3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "node-hid": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@types/w3c-web-hid": "^1.0.7"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.6.3",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "node-hid": "^3.4.0",
+    "publint": "^0.3.25",
+    "tsdown": "^0.23.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

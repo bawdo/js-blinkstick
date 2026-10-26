@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@^11.5.1
+      # The tag must name the version being published.
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - run: npm ci
+      # CI checks, the same steps as ci.yml.
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:package
+      - run: npm run check:bundle
+      - run: npm run check:types
+      - run: node scripts/check-declarations.mjs
+      - run: npm publish

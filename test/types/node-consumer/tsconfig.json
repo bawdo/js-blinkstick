@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "noEmit": true,
+    "skipLibCheck": false,
+    "paths": {
+      "@bawdo/blinkstick": ["../../../dist/index.d.ts"],
+      "@bawdo/blinkstick/node": ["../../../dist/node.d.ts"]
+    }
+  },
+  "include": ["index.ts"]
+}
