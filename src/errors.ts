@@ -16,7 +16,14 @@ export type BlinkStickErrorCode =
   | "DUPLICATE_NAME"
   | "DISCONNECTED";
 
-/** Every failure the library raises on purpose carries a stable `code`. */
+/**
+ * An operational failure with a stable `code`, for the cases listed on
+ * BlinkStickErrorCode. Not every failure is one. These are plain errors: a
+ * transfer that still fails after its retries and any reopen, a received
+ * report of the wrong length, a name that cannot be read while listing, and a
+ * missing platform (no WebHID in the browser, no HID package in Node).
+ * Programmer mistakes throw TypeError or RangeError.
+ */
 export class BlinkStickError extends Error {
   readonly code: BlinkStickErrorCode;
 

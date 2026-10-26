@@ -42,6 +42,11 @@ export interface Backend<H> {
  *   in Chrome on macOS, which return ID plus 33 bytes against a declared 32);
  * - anything else (shorter than `length`, or longer with a first byte that is
  *   not the ID) throws.
+ *
+ * One case is ambiguous: a report that arrives without its ID, longer than
+ * `length`, whose first data byte equals the ID, is mis-stripped. It has never
+ * been seen, and the older rule (which took only `length + 1` bytes) had the
+ * same ambiguity at that length.
  */
 export function stripReportId(
   reportId: number,

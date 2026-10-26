@@ -146,9 +146,12 @@ describe("effects", () => {
     const b = stick.morph({ r: 0, g: 0, b: 100 }, { duration: 40 });
     await vi.runAllTimersAsync();
     await Promise.all([a, b]);
-    const last = ft.frame(2);
-    expect(ft.sentFrames(2).length).toBe(4);
-    expect(last).toEqual(fill(2, { r: 0, g: 0, b: 100 }));
+    expect(ft.sentFrames(2)).toEqual([
+      fill(2, { r: 50, g: 0, b: 0 }),
+      fill(2, { r: 0, g: 0, b: 50 }),
+      fill(2, { r: 100, g: 0, b: 0 }),
+      fill(2, { r: 0, g: 0, b: 100 }),
+    ]);
   });
 });
 

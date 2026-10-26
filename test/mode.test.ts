@@ -40,6 +40,18 @@ describe("modes", () => {
     expect(ft.sendCount()).toBe(0);
   });
 
+  test("modeReadError", async () => {
+    // Go's TestModeReadError: every attempt fails, so the I/O error surfaces.
+    const { stick, ft } = open("square");
+    ft.fail = 3;
+    await expect(stick.getMode()).rejects.toThrow(/get report 4/);
+    ft.fail = 3;
+    await expect(stick.setMode("ws2812-mirror")).rejects.toThrow(
+      /get report 4/,
+    );
+    expect(ft.sendCount()).toBe(0);
+  });
+
   test("rejectsUnsupportedModes", async () => {
     for (const model of ["nano", "square", "unknown"] as const) {
       for (const mode of ["rgb", "rgb-inverse"] as const) {
