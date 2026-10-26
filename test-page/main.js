@@ -38,9 +38,13 @@ function same(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** Failures in the check now running. */
+let failures = 0;
+
 /** Logs PASS or FAIL for one expectation, and returns whether it held. */
 function expect(label, actual, wanted) {
   const ok = same(actual, wanted);
+  if (!ok) failures++;
   log(
     ok
       ? `PASS ${label}`
@@ -183,18 +187,20 @@ const checks = {
         filled(stick, { r: 64, g: 64, b: 64 }),
       );
       stick.brightnessLimit = 255;
-      stick.inverted = true;
-      await stick.setAll(RED);
-      log("watch: all LEDs cyan (red inverted)");
-      await sleep(1500);
-      expect(
-        "inverted frame reads back as red",
-        await stick.getFrame(),
-        filled(stick, RED),
-      );
-      // Turn off while still inverted, so the LEDs really go dark.
-      await stick.off();
-      stick.inverted = false;
+      try {
+        stick.inverted = true;
+        await stick.setAll(RED);
+        log("watch: all LEDs cyan (red inverted)");
+        await sleep(1500);
+        expect(
+          "inverted frame reads back as red",
+          await stick.getFrame(),
+          filled(stick, RED),
+        );
+      } finally {
+        // While inverted, off() would write 255 and light the LEDs white.
+        stick.inverted = false;
+      }
     });
   },
 
@@ -287,28 +293,64 @@ const checks = {
 
   async reconnect() {
     await withStick(async (stick) => {
+      const orange = { r: 255, g: 80, b: 0 };
       const controller = new AbortController();
       const timer = setTimeout(
         () => controller.abort(new Error("gave up after 120 s")),
         120000,
       );
       log(
-        "blinking orange. UNPLUG the stick now, wait a few seconds, then PLUG IT BACK IN (120 s)",
+        `blinking orange. UNPLUG the stick now: ${stick.info.model}. Keep it out for a few seconds`,
       );
-      const orange = { r: 255, g: 80, b: 0 };
+      let rejection;
       try {
         await stick.blink(orange, {
           period: 1000,
           iterations: 100,
           signal: controller.signal,
         });
-        log("OUTCOME: blink resolved (it ran to the end)");
+        log(
+          "OUTCOME: blink resolved (it ran to the end, so nothing was unplugged)",
+        );
+        failures++;
+        return;
       } catch (error) {
-        const code = error?.code ?? "none";
-        log(`OUTCOME: blink rejected, code ${code}, message ${error?.message}`);
+        rejection = error;
+        log(
+          `OUTCOME: blink rejected, code ${error?.code ?? "none"}, message ${error?.message}`,
+        );
       } finally {
         clearTimeout(timer);
       }
+      if (rejection?.code !== "DISCONNECTED") {
+        failures++;
+        return;
+      }
+      log("PLUG IT BACK IN now (60 s)");
+      let frame;
+      let last;
+      for (const end = Date.now() + 60000; Date.now() < end; ) {
+        try {
+          frame = await stick.getFrame();
+          break;
+        } catch (error) {
+          last = error;
+          await sleep(200);
+        }
+      }
+      if (frame === undefined) {
+        failures++;
+        log(`OUTCOME: never recovered, last error ${describeError(last)}`);
+        return;
+      }
+      log("OUTCOME: recovered, getFrame works again");
+      // The blink was mid-cycle, so the last painted frame is orange or off.
+      const matches =
+        same(frame, filled(stick, orange)) || same(frame, filled(stick, OFF));
+      log(
+        `last frame read ${JSON.stringify(frame[0])}: ${matches ? "matches the last painted colour (orange or off)" : "does not match orange or off"}`,
+      );
+      if (!matches) failures++;
     });
   },
 };
@@ -328,13 +370,16 @@ const labels = {
 
 async function run(name) {
   for (const b of buttons) b.disabled = true;
-  log(`--- ${labels[name] ?? name} ---`);
+  const label = labels[name] ?? name;
+  log(`--- ${label} ---`);
+  failures = 0;
   try {
     await checks[name]();
-    log(`done: ${labels[name] ?? name}`);
   } catch (error) {
-    log(`FAIL ${labels[name] ?? name}: ${describeError(error)}`);
+    failures++;
+    log(`error in ${label}: ${describeError(error)}`);
   } finally {
+    log(failures === 0 ? `PASS ${label}` : `FAIL ${label} (${failures})`);
     for (const b of buttons) b.disabled = false;
   }
 }

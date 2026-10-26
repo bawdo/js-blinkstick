@@ -98,11 +98,13 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
     // node-hid directly, and close, before the library opens anything.
     const hid = await importHid();
     const raw = await hid.devicesAsync(VENDOR_ID, PRODUCT_ID);
-    // Report sizes exclude the report ID: 2 is 32, 4 is 1, 6 is 25.
+    // Report sizes exclude the report ID: 2 is 32, 4 is 1, 6 is 25, 10 is 2.
     const reports: [number, number][] = [
       [2, 32],
       [4, 1],
       [6, 25],
+      // The Square's undocumented report 10. Read only, never written.
+      [10, 2],
     ];
     for (const d of raw) {
       if (d.path === undefined) continue;
@@ -131,13 +133,14 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
     console.log(
       `attached: ${nanos.length} nano, ${squares.length} square, ${infos.length - nanos.length - squares.length} other`,
     );
-  });
+  }, 120_000);
 
-  test("lists at least one supported stick", (ctx) => {
-    if (nanos.length + squares.length === 0) {
-      ctx.skip();
-      return;
-    }
+  test("lists at least one supported stick", () => {
+    // A failure, not a skip: on Linux this is how missing udev rules show up.
+    expect(
+      nanos.length + squares.length,
+      "no supported stick found: is one attached, and are the udev rules installed?",
+    ).toBeGreaterThan(0);
     for (const info of infos) console.log("info", JSON.stringify(info));
   });
 
@@ -149,6 +152,7 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
     for (const info of infos) {
       console.log("info", JSON.stringify(info));
       expect(info.serial).toMatch(/^BS/);
+      expect(info.manufacturer).toBe("Agile Innovative Ltd");
       expect(info.version).not.toBe("");
       expect(info.release).toBeGreaterThan(0);
       expect(info.model, "model should not be unknown").not.toBe("unknown");
@@ -201,15 +205,18 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
   });
 
   eachStick("inverted", async (stick) => {
-    stick.inverted = true;
-    await stick.setAll(red);
-    console.log("watch: all LEDs cyan (red inverted)");
-    await sleep(hold(stick));
-    expect(await stick.getFrame()).toEqual(
-      Array.from({ length: stick.ledCount }, () => red),
-    );
-    // Turn the LEDs off while still inverted, so they really go dark.
-    await stick.off();
+    try {
+      stick.inverted = true;
+      await stick.setAll(red);
+      console.log("watch: all LEDs cyan (red inverted)");
+      await sleep(hold(stick));
+      expect(await stick.getFrame()).toEqual(
+        Array.from({ length: stick.ledCount }, () => red),
+      );
+    } finally {
+      // While inverted, off() would write 255 and light the LEDs white.
+      stick.inverted = false;
+    }
   });
 
   eachStick("effects", async (stick) => {
@@ -303,11 +310,14 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
       ctx.skip();
       return;
     }
-    const first = await open({ serial: a.serial });
-    const second = await open({ serial: b.serial });
+    let first: Stick | undefined;
+    let second: Stick | undefined;
     try {
+      first = await open({ serial: a.serial });
+      second = await open({ serial: b.serial });
+      const both = [first, second];
       await Promise.all(
-        [first, second].map(async (stick) => {
+        both.map(async (stick) => {
           const p = pace(stick);
           for (let i = 0; i < 20; i++) {
             await stick.setAll(i % 2 === 0 ? red : blue);
@@ -323,11 +333,39 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
         Array.from({ length: second.ledCount }, () => green),
       );
     } finally {
-      await first.off().catch(() => undefined);
-      await first.close().catch(() => undefined);
-      await second.off().catch(() => undefined);
-      await second.close().catch(() => undefined);
+      for (const stick of [first, second]) {
+        await stick?.off().catch(() => undefined);
+        await stick?.close().catch(() => undefined);
+      }
     }
+  });
+
+  // Lists and opens every stick from several tasks at once. It writes nothing.
+  test("concurrent list and open", async (ctx) => {
+    if (infos.length === 0) {
+      ctx.skip();
+      return;
+    }
+    const jobs: Promise<void>[] = [];
+    for (let i = 0; i < 8; i++) {
+      for (const info of infos) {
+        jobs.push(
+          (async () => {
+            await list();
+            let stick: Stick;
+            try {
+              stick = await open({ serial: info.serial });
+            } catch {
+              // macOS opens devices exclusively, so a concurrent open of the
+              // same stick may fail. Only a crash or a hang is a failure.
+              return;
+            }
+            await stick.close().catch(() => undefined);
+          })(),
+        );
+      }
+    }
+    await Promise.all(jobs);
   });
 
   test.skipIf(!reconnectEnabled)(
@@ -343,7 +381,9 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
       try {
         await stick.setAll(orange);
 
-        console.log("Unplug the stick now (you have 60 seconds)");
+        console.log(
+          `Unplug the stick now: ${info.model} ${info.serial} (you have 60 seconds)`,
+        );
         let gone: unknown;
         for (const end = Date.now() + 60_000; Date.now() < end; ) {
           try {
@@ -358,7 +398,9 @@ describe.skipIf(!enabled)("hardware", { timeout: 120_000 }, () => {
         console.log(`while unplugged: ${String(gone)}`);
         expect((gone as { code?: string }).code).toBe("DISCONNECTED");
 
-        console.log("Plug it back in (you have 60 seconds)");
+        console.log(
+          `Plug it back in: ${info.model} ${info.serial} (you have 60 seconds)`,
+        );
         let frame: Color[] | undefined;
         let last: unknown;
         for (const end = Date.now() + 60_000; Date.now() < end; ) {
