@@ -181,6 +181,58 @@ describe("webhid fromHIDDevice", () => {
     });
   });
 
+  test("an unknown model is refused before an already open device is touched", async () => {
+    const device = new FakeHIDDevice({ productName: "BlinkStick" });
+    await device.open();
+    const hid = new FakeHID([device]);
+    const error = await rejection(
+      fromHIDDevice(asHIDDevice(device), { hid: hid.asHID }),
+    );
+    expect((error as BlinkStickError).code).toBe("UNSUPPORTED_MODEL");
+    expect(device.opened).toBe(true);
+    expect([device.opens, device.closes]).toEqual([1, 0]);
+    expect(device.sent).toEqual([]);
+    expect(device.received).toEqual([]);
+    expect(hid.listeners.get("disconnect") ?? 0).toBe(0);
+  });
+
+  test("a device that is not a BlinkStick is refused, even with a hint", async () => {
+    for (const ids of [
+      { vendorId: 0x046d },
+      { productId: 0x0001 },
+      { vendorId: 0x046d, productId: 0x0001 },
+    ]) {
+      for (const alreadyOpen of [false, true]) {
+        const device = new FakeHIDDevice({
+          productName: "BlinkStick Nano",
+          ...ids,
+        });
+        if (alreadyOpen) await device.open();
+        const hid = new FakeHID([device]);
+        const error = await rejection(
+          fromHIDDevice(asHIDDevice(device), { hid: hid.asHID, model: "nano" }),
+        );
+        expect(error).toBeInstanceOf(BlinkStickError);
+        expect((error as BlinkStickError).code).toBe("UNSUPPORTED_MODEL");
+        expect(device.opened).toBe(alreadyOpen);
+        expect([device.opens, device.closes]).toEqual([alreadyOpen ? 1 : 0, 0]);
+        expect(device.sent).toEqual([]);
+        expect(hid.listeners.get("disconnect") ?? 0).toBe(0);
+      }
+    }
+  });
+
+  test("close closes a device the caller had already opened", async () => {
+    const device = nanoDevice();
+    await device.open();
+    const hid = new FakeHID([device]);
+    const stick = await fromHIDDevice(asHIDDevice(device), { hid: hid.asHID });
+    expect(device.opens).toBe(1);
+    await stick.close();
+    expect(device.closes).toBe(1);
+    expect(device.opened).toBe(false);
+  });
+
   test("a hint that conflicts with detection rejects UNSUPPORTED_MODEL", async () => {
     const device = nanoDevice();
     const hid = new FakeHID([device]);
@@ -234,6 +286,40 @@ describe("webhid reconnect", () => {
     await stick.setAll(RED);
     expect(nano.sent).toHaveLength(1);
     expect(nano.opens).toBe(1);
+  });
+});
+
+describe("webhid device ownership", () => {
+  test("names: true leaves a device the caller opened open", async () => {
+    const nano = nanoDevice("desk");
+    await nano.open();
+    const hid = new FakeHID([nano]);
+    const named = await list({ hid: hid.asHID, names: true });
+    expect(named.map((n) => [n.name, n.busy])).toEqual([["desk", false]]);
+    expect(nano.opened).toBe(true);
+    expect([nano.opens, nano.closes]).toEqual([1, 0]);
+  });
+
+  test("a name lookup leaves a device the caller opened open", async () => {
+    const nano = nanoDevice("desk");
+    await nano.open();
+    const square = squareDevice("shelf");
+    const hid = new FakeHID([nano, square]);
+    const stick = await open({ hid: hid.asHID, name: "shelf" });
+    expect(stick.info.model).toBe("square");
+    expect(nano.opened).toBe(true);
+    expect(nano.closes).toBe(0);
+  });
+
+  test("closing a stick opened over the caller's open device leaves it open", async () => {
+    const nano = nanoDevice();
+    await nano.open();
+    const hid = new FakeHID([nano]);
+    const stick = await open({ hid: hid.asHID });
+    await stick.close();
+    expect(nano.opened).toBe(true);
+    expect(nano.closes).toBe(0);
+    expect(hid.listeners.get("disconnect")).toBe(0);
   });
 });
 

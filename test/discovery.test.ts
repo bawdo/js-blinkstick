@@ -60,7 +60,9 @@ describe("discovery", () => {
     ]);
     const error = await rejection(openStick(serialPlatform(backend)));
     expect(error.code).toBe("UNSUPPORTED_MODEL");
-    expect(flex.closed).toBe(true);
+    // Refused before opening, so nothing is left open.
+    expect(backend.opened).toEqual([]);
+    expect(flex.sendCount() + flex.gets).toBe(0);
   });
 
   test("openSerial", async () => {
@@ -93,7 +95,9 @@ describe("discovery", () => {
       openStick(serialPlatform(backend), { match: bySerial("BS000002-3.0") }),
     );
     expect(error.code).toBe("UNSUPPORTED_MODEL");
-    expect(transports.flex.closed).toBe(true);
+    // Refused before opening, so the transport is never left open.
+    expect(backend.opened).toEqual([]);
+    expect(transports.flex.sendCount() + transports.flex.gets).toBe(0);
   });
 
   test("twoDevicesAreIndependent", async () => {
@@ -174,10 +178,14 @@ describe("model hint", () => {
       fill(2, { r: 1, g: 2, b: 3 }),
     );
 
+    const opensBefore = backend.opened.length;
     const refused = await rejection(
       wrapHandle(p, first.handle, first.identity),
     );
     expect(refused.code).toBe("UNSUPPORTED_MODEL");
+    // Refused before the handle is opened, so a caller's open handle is untouched.
+    expect(backend.opened.length).toBe(opensBefore);
+    expect(backend.devices[0]?.transport.closed).toBe(false);
     const hinted = await wrapHandle(p, first.handle, first.identity, "square");
     expect(hinted.info.model).toBe("square");
   });

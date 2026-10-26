@@ -8,6 +8,7 @@ import {
   openStick,
   wrapHandle,
 } from "./discovery.js";
+import { BlinkStickError } from "./errors.js";
 import type { Model } from "./models.js";
 import { detectFromDescriptor } from "./models.js";
 import type { Identity } from "./transport.js";
@@ -15,6 +16,7 @@ import {
   candidatesOf,
   FILTERS,
   identityOf,
+  isBlinkStick,
   webhidBackend,
 } from "./webhid/backend.js";
 
@@ -68,11 +70,14 @@ function resolveHid(options: HidOption | undefined): HID {
  * The browser platform for one `HID` object. Detection is by product string
  * and descriptor, which is weaker than Node's serial rule, so `model` hints
  * fill the gap. There is no key: reconnect matches by device, then name, then
- * model.
+ * model. `owned` is a device the caller handed over, which is closed on close.
  */
-function platformFor(hid: HID): Platform<HIDDevice, WebHidBlinkStickInfo> {
+function platformFor(
+  hid: HID,
+  owned?: HIDDevice,
+): Platform<HIDDevice, WebHidBlinkStickInfo> {
   return {
-    backend: webhidBackend(hid),
+    backend: webhidBackend(hid, owned),
     toInfo(identity: Identity, hint?: Model): WebHidBlinkStickInfo {
       const detected = detectFromDescriptor(
         identity.product,
@@ -122,6 +127,8 @@ export async function list(
  * Opens the first paired stick, or the one named `name`. Rejects with
  * NOT_FOUND if there is none. If the stick is later unplugged, the next call
  * reopens it by matching the same device, then its stored name, then its model.
+ * A device that was already open when the stick opened it stays open after
+ * `close()`; one this opened is closed.
  */
 export async function open(
   options: OpenOptions = {},
@@ -136,7 +143,9 @@ export async function open(
 /**
  * Wraps a `HIDDevice` the caller already has, for code that does its own
  * pairing. It opens the device if it is not open yet. The `hid` object is
- * still needed, to watch for disconnects and to find the stick again.
+ * still needed, to watch for disconnects and to find the stick again. A
+ * device without the BlinkStick vendor and product IDs, or one of an
+ * unsupported model, is refused with UNSUPPORTED_MODEL before it is opened.
  *
  * The stick takes ownership of the `HIDDevice`: calling `close()` on the stick
  * closes the caller's device, so do not keep using it.
@@ -145,6 +154,21 @@ export async function fromHIDDevice(
   device: HIDDevice,
   options: FromHIDDeviceOptions = {},
 ): Promise<BlinkStick<WebHidBlinkStickInfo>> {
-  const p = platformFor(resolveHid(options));
-  return wrapHandle(p, device, identityOf(device), options.model);
+  const hid = resolveHid(options);
+  if (!isBlinkStick(device)) {
+    throw new BlinkStickError(
+      "UNSUPPORTED_MODEL",
+      `blinkstick: ${device.productName} is not a BlinkStick (${hex(device.vendorId)}:${hex(device.productId)})`,
+    );
+  }
+  return wrapHandle(
+    platformFor(hid, device),
+    device,
+    identityOf(device),
+    options.model,
+  );
+}
+
+function hex(id: number): string {
+  return id.toString(16).padStart(4, "0");
 }

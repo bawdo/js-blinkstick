@@ -133,7 +133,8 @@ export async function openStick<H, I extends BlinkStickInfo>(
 
 /**
  * Opens `handle` and builds a stick from the identity the caller already has.
- * Refuses an unsupported model with UNSUPPORTED_MODEL.
+ * Refuses an unsupported model with UNSUPPORTED_MODEL before opening, so a
+ * handle the caller had open is left as it was.
  */
 export async function wrapHandle<H, I extends BlinkStickInfo>(
   p: Platform<H, I>,
@@ -142,6 +143,7 @@ export async function wrapHandle<H, I extends BlinkStickInfo>(
   hint?: Model,
 ): Promise<BlinkStick<I>> {
   const info = p.toInfo(identity, hint);
+  if (info.model === "unknown") throw unsupported(identity);
   const transport = await p.backend.open(handle);
   return build(p, handle, identity, info, transport, undefined, hint);
 }
@@ -293,10 +295,7 @@ async function build<H, I extends BlinkStickInfo>(
 ): Promise<BlinkStick<I>> {
   if (info.model === "unknown") {
     await closeQuietly(transport);
-    throw new BlinkStickError(
-      "UNSUPPORTED_MODEL",
-      `blinkstick: unsupported model: ${describe(identity)}${releaseText(identity)}`,
-    );
+    throw unsupported(identity);
   }
   const key = p.key?.(identity);
   let current = handle;
@@ -375,6 +374,13 @@ async function closeQuietly(transport: Transport): Promise<void> {
   } catch {
     // The transport is being dropped, so a failed close changes nothing.
   }
+}
+
+function unsupported(identity: Identity): BlinkStickError {
+  return new BlinkStickError(
+    "UNSUPPORTED_MODEL",
+    `blinkstick: unsupported model: ${describe(identity)}${releaseText(identity)}`,
+  );
 }
 
 function describe(identity: Identity): string {

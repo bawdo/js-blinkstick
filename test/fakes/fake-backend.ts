@@ -17,6 +17,8 @@ interface FakeDevice {
 
 export class FakeBackend implements Backend<FakeHandle> {
   devices: FakeDevice[];
+  /** The index of every device opened, in order. */
+  opened: number[] = [];
 
   constructor(devices: { identity: Identity; transport?: FakeTransport }[]) {
     this.devices = devices.map((d, index) => ({
@@ -48,6 +50,7 @@ export class FakeBackend implements Backend<FakeHandle> {
         ),
       );
     }
+    this.opened.push(this.devices.indexOf(d));
     return Promise.resolve(d.transport);
   }
 

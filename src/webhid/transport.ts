@@ -10,6 +10,15 @@ import { stripReportId } from "../transport.js";
  */
 const held = new WeakSet<HIDDevice>();
 
+export interface WebHidTransportOptions {
+  /**
+   * Close the device on `close` even if it was already open, because the
+   * caller handed it over. Otherwise only a device this transport opened is
+   * closed, so one the caller opened is left open.
+   */
+  owned?: boolean;
+}
+
 /**
  * Opens `device` (unless it is already open) and wraps it. WebHID takes the
  * report ID separately on send, and may or may not return it on receive, so
@@ -20,6 +29,7 @@ const held = new WeakSet<HIDDevice>();
 export async function webhidTransport(
   hid: HID,
   device: HIDDevice,
+  options: WebHidTransportOptions = {},
 ): Promise<Transport> {
   if (held.has(device)) {
     throw new BlinkStickError(
@@ -28,6 +38,7 @@ export async function webhidTransport(
     );
   }
   held.add(device);
+  const closeOnClose = options.owned === true || !device.opened;
   try {
     if (!device.opened) await device.open();
   } catch (error) {
@@ -65,7 +76,7 @@ export async function webhidTransport(
       closed = true;
       hid.removeEventListener("disconnect", onDisconnect);
       held.delete(device);
-      await device.close();
+      if (closeOnClose) await device.close();
     },
   };
 }
