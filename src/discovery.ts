@@ -2,7 +2,9 @@ import type { BlinkStickInfo } from "./blinkstick.js";
 import { BlinkStick } from "./blinkstick.js";
 import { BlinkStickError } from "./errors.js";
 import type { Model } from "./models.js";
+import { MODEL_NAMES } from "./models.js";
 import type { Backend, Candidate, Identity, Transport } from "./transport.js";
+import { closeQuietly } from "./transport.js";
 
 /**
  * What a platform entry gives the shared discovery code: a backend, its model
@@ -46,8 +48,6 @@ export interface Previous<H> {
   hint?: Model;
 }
 
-const HINTS: readonly Model[] = ["nano", "square"];
-
 /**
  * The model hint rule, shared by every platform's `toInfo`. A hint is used
  * only when detection says 'unknown'. When detection succeeds and a hint
@@ -55,7 +55,7 @@ const HINTS: readonly Model[] = ["nano", "square"];
  */
 export function applyModelHint(detected: Model, hint?: Model): Model {
   if (hint === undefined) return detected;
-  if (!HINTS.includes(hint)) {
+  if (!MODEL_NAMES.some((name) => name === hint)) {
     throw new TypeError(
       `blinkstick: unknown model hint ${String(hint)}, expected nano or square`,
     );
@@ -375,14 +375,6 @@ async function readName(
   } catch (error) {
     await closeQuietly(transport);
     throw error;
-  }
-}
-
-async function closeQuietly(transport: Transport): Promise<void> {
-  try {
-    await transport.close();
-  } catch {
-    // The transport is being dropped, so a failed close changes nothing.
   }
 }
 

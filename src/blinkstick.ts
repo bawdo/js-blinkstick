@@ -15,6 +15,7 @@ import {
 } from "./protocol.js";
 import { createQueue } from "./queue.js";
 import type { Transport } from "./transport.js";
+import { closeQuietly } from "./transport.js";
 import {
   assertBoolean,
   assertByte,
@@ -560,14 +561,6 @@ function transferError(op: string, reportId: number, cause: unknown): Error {
     `blinkstick: ${op} report ${reportId} failed after ${TRANSFER_ATTEMPTS} attempts`,
     { cause },
   );
-}
-
-async function closeQuietly(transport: Transport): Promise<void> {
-  try {
-    await transport.close();
-  } catch {
-    // The transport is being replaced, so a failed close changes nothing.
-  }
 }
 
 // Defined only where the runtime has the symbol, so that older runtimes do not
