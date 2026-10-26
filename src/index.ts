@@ -1,3 +1,5 @@
+export type { BlinkStickInfo } from "./blinkstick.js";
+export { BlinkStick } from "./blinkstick.js";
 export type { Color } from "./color.js";
 export { invert, OFF, parseColor, toHex } from "./color.js";
 export { colorNames } from "./color-names.js";
