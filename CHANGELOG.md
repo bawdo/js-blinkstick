@@ -4,6 +4,12 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- The release workflow creates the GitHub release after publishing to npm, using the version's CHANGELOG section as the notes (`scripts/release-notes.sh`).
+
 ## [0.1.1] - 2026-10-26
 
 ### Changed
