@@ -1,6 +1,8 @@
 /// <reference lib="esnext.disposable" preserve="true" />
 import type { Color } from "./color.js";
 import { invert, OFF, scale } from "./color.js";
+import type { BlinkOptions, MorphOptions, PulseOptions } from "./effects.js";
+import { checkIterations, checkMs, lerp, STEP_MS, sleep } from "./effects.js";
 import { BlinkStickError } from "./errors.js";
 import type { Mode, Model } from "./models.js";
 import { byteToMode, ledCount, modeToByte, supportsMode } from "./models.js";
@@ -179,6 +181,59 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   }
 
   /**
+   * Turns every LED to `color` for half of `period`, then off for the other
+   * half, `iterations` times. Ends with the LEDs off. If `signal` aborts, the
+   * promise rejects with its reason and the LEDs are left as they are.
+   */
+  async blink(color: Color, options: BlinkOptions = {}): Promise<void> {
+    assertColor(color);
+    const period = checkMs(options.period, "period", false);
+    const iterations = checkIterations(options.iterations);
+    const { signal } = options;
+    const on = { ...color };
+    for (let i = 0; i < iterations; i++) {
+      signal?.throwIfAborted();
+      await this.setAll(on);
+      await sleep(period / 2, signal);
+      signal?.throwIfAborted();
+      await this.setAll(OFF);
+      await sleep(period / 2, signal);
+    }
+  }
+
+  /**
+   * Fades every LED from off up to `color` over half of `duration` and back
+   * down over the other half, `iterations` times. Ends with the LEDs off. If
+   * `signal` aborts, the promise rejects with its reason and the LEDs are left
+   * as they are.
+   */
+  async pulse(color: Color, options: PulseOptions = {}): Promise<void> {
+    assertColor(color);
+    const duration = checkMs(options.duration, "duration", false);
+    const iterations = checkIterations(options.iterations);
+    const { signal } = options;
+    const peak = { ...color };
+    for (let i = 0; i < iterations; i++) {
+      signal?.throwIfAborted();
+      await this.off();
+      await this.#morph(peak, duration / 2, signal);
+      await this.#morph(OFF, duration / 2, signal);
+    }
+  }
+
+  /**
+   * Fades every LED from the value read back from the stick to `color` over
+   * `duration`, in 20 ms steps. A duration under one step jumps straight to
+   * `color`. Ends with every LED at `color`. If `signal` aborts, the promise
+   * rejects with its reason and the LEDs are left as they are.
+   */
+  async morph(color: Color, options: MorphOptions = {}): Promise<void> {
+    assertColor(color);
+    const duration = checkMs(options.duration, "duration", true);
+    return this.#morph({ ...color }, duration, options.signal);
+  }
+
+  /**
    * Reads user data block 1 or 2 from the stick's EEPROM, with trailing NUL
    * bytes removed. Data that ends in NUL bytes does not round-trip.
    */
@@ -290,6 +345,27 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
    */
   #scaled(color: Color): Color {
     return scale(color, this.#brightnessLimit);
+  }
+
+  /**
+   * Fades from the stick's current frame to `color`. Every step is its own
+   * queued write, so other calls and effects interleave between steps. The
+   * brightness limit is captured when the fade starts.
+   */
+  async #morph(
+    color: Color,
+    duration: number,
+    signal: AbortSignal | undefined,
+  ): Promise<void> {
+    signal?.throwIfAborted();
+    const target = this.#scaled(color);
+    const from = await this.getFrame();
+    const steps = Math.max(1, Math.trunc(duration / STEP_MS));
+    for (let s = 1; s <= steps; s++) {
+      signal?.throwIfAborted();
+      await this.#writeFrame(from.map((f) => lerp(f, target, s, steps)));
+      if (s < steps) await sleep(STEP_MS, signal);
+    }
   }
 
   /** Flips (as of this call) and sends a scaled frame, then remembers it. */
