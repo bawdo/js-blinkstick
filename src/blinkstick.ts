@@ -27,8 +27,13 @@ export interface BlinkStickInfo {
 export interface StickOptions<I extends BlinkStickInfo> {
   transport: Transport;
   info: I;
-  /** Reopens the stick after it is unplugged. Used from Task 7 onwards. */
+  /**
+   * Finds and opens the stick again after a transfer fails, given the last
+   * name seen on it. Rejects if no replacement can be found or opened.
+   */
   reopen?: (knownName: string | undefined) => Promise<Transport>;
+  /** The name the stick was opened by, if any, for reconnecting by name. */
+  knownName?: string;
 }
 
 /** Covers the firmware being busy straight after a write, and flaky macOS sets. */
@@ -61,13 +66,13 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   inverted: boolean = false;
 
   #brightnessLimit = 255;
-  #transport: Transport;
+  /** Undefined only while disconnected, and only on a stick that can reopen. */
+  #transport: Transport | undefined;
   #closed = false;
   readonly #run = createQueue();
   /** Last frame written, scaled and before flipping. */
   #lastFrame: Color[] | undefined;
   /** Last name read or written, for reconnecting by name. */
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read by the reconnect in Task 7
   #knownName: string | undefined;
   readonly #reopen:
     | ((knownName: string | undefined) => Promise<Transport>)
@@ -77,6 +82,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   constructor(options: StickOptions<I>) {
     this.#transport = options.transport;
     this.#reopen = options.reopen;
+    this.#knownName = options.knownName;
     this.info = options.info;
     this.ledCount = ledCount(options.info.model);
   }
@@ -109,7 +115,10 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     return this.#run(async () => {
       this.#assertOpen();
       this.#closed = true;
-      await this.#transport.close();
+      const transport = this.#transport;
+      this.#transport = undefined;
+      // Nothing is left to release while disconnected.
+      await transport?.close();
     });
   }
 
@@ -417,8 +426,11 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   }
 
   /**
-   * Runs `fn` against the transport, up to three attempts. Must be called from
-   * inside the queue. Rejects with CLOSED, sending nothing, once closed.
+   * Runs `fn` against the transport, up to three attempts. If they all fail and
+   * the stick can reopen, closes the transport, reopens, repaints the last
+   * frame unless this was a frame write, and runs `fn` once more. While
+   * disconnected every call tries to reopen first. Must be called from inside
+   * the queue. Rejects with CLOSED, sending nothing, once closed.
    */
   async #transfer<T>(
     op: "send" | "get",
@@ -426,18 +438,109 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     fn: (transport: Transport) => Promise<T>,
   ): Promise<T> {
     this.#assertOpen();
-    let failure: unknown;
-    for (let attempt = 0; attempt < TRANSFER_ATTEMPTS; attempt++) {
+    const current = this.#transport;
+    if (current !== undefined) {
       try {
-        return await fn(this.#transport);
+        return await attempt(current, fn);
       } catch (error) {
-        failure = error;
+        if (this.#reopen === undefined) {
+          throw transferError(op, reportId, error);
+        }
+        this.#transport = undefined;
+        await closeQuietly(current);
       }
     }
-    throw new Error(
-      `blinkstick: ${op} report ${reportId} failed after ${TRANSFER_ATTEMPTS} attempts`,
-      { cause: failure },
+    // A failed frame send is about to be replaced, so repainting the old
+    // frame first would only flash it.
+    const next = await this.#reconnect(
+      !(op === "send" && reportId === REPORT.frame),
     );
+    try {
+      return await attempt(next, fn);
+    } catch (error) {
+      throw transferError(op, reportId, error);
+    }
+  }
+
+  /**
+   * Reopens the stick and, if `repaint` is set, rewrites the last frame with
+   * the flip in force now. Runs inside the queue while disconnected.
+   */
+  async #reconnect(repaint: boolean): Promise<Transport> {
+    const reopen = this.#reopen;
+    if (reopen === undefined) {
+      throw new Error("blinkstick: reconnect without reopen");
+    }
+    let next: Transport;
+    try {
+      next = await reopen(this.#knownName);
+    } catch (error) {
+      throw this.#disconnected(error);
+    }
+    this.#transport = next;
+    const last = this.#lastFrame;
+    if (!repaint || last === undefined) return next;
+    const data = encodeFrame(this.inverted ? last.map(invert) : last);
+    try {
+      await attempt(next, (t) => t.sendFeatureReport(REPORT.frame, data));
+    } catch (error) {
+      this.#transport = undefined;
+      await closeQuietly(next);
+      const failed = transferError("send", REPORT.frame, error);
+      throw this.#disconnected(
+        new Error(`repaint after reopening: ${failed.message}`, {
+          cause: failed,
+        }),
+      );
+    }
+    return next;
+  }
+
+  /**
+   * DISCONNECTED, naming the serial if the info has one, and the cause unless
+   * it is NOT_FOUND, which is what disconnected means anyway.
+   */
+  #disconnected(cause: unknown): BlinkStickError {
+    let message = "blinkstick: device disconnected";
+    const serial = (this.info as { serial?: unknown }).serial;
+    if (typeof serial === "string" && serial !== "") message += `: ${serial}`;
+    const notFound =
+      cause instanceof BlinkStickError && cause.code === "NOT_FOUND";
+    if (!notFound) {
+      message += `: ${cause instanceof Error ? cause.message : String(cause)}`;
+    }
+    return new BlinkStickError("DISCONNECTED", message, { cause });
+  }
+}
+
+/** Runs `fn` up to TRANSFER_ATTEMPTS times, rejecting with the last failure. */
+async function attempt<T>(
+  transport: Transport,
+  fn: (transport: Transport) => Promise<T>,
+): Promise<T> {
+  let failure: unknown;
+  for (let i = 0; i < TRANSFER_ATTEMPTS; i++) {
+    try {
+      return await fn(transport);
+    } catch (error) {
+      failure = error;
+    }
+  }
+  throw failure;
+}
+
+function transferError(op: string, reportId: number, cause: unknown): Error {
+  return new Error(
+    `blinkstick: ${op} report ${reportId} failed after ${TRANSFER_ATTEMPTS} attempts`,
+    { cause },
+  );
+}
+
+async function closeQuietly(transport: Transport): Promise<void> {
+  try {
+    await transport.close();
+  } catch {
+    // The transport is being replaced, so a failed close changes nothing.
   }
 }
 
