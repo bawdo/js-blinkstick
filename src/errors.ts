@@ -20,8 +20,8 @@ export type BlinkStickErrorCode =
  * An operational failure with a stable `code`, for the cases listed on
  * BlinkStickErrorCode. Not every failure is one. These are plain errors: a
  * transfer that still fails after its retries and any reopen, a received
- * report of the wrong length, a name that cannot be read while listing, and a
- * missing platform (no WebHID in the browser, no HID package in Node).
+ * report of the wrong length, and a missing platform (no WebHID in the
+ * browser, no HID package in Node).
  * Programmer mistakes throw TypeError or RangeError.
  */
 export class BlinkStickError extends Error {

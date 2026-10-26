@@ -66,7 +66,7 @@ const desk = await open({ serial: "BS072777-3.0" });
 
 Give a stick a name once with `setName("desk")`, then `open({ name: "desk" })`. In the browser
 there are no serials, so names are how you tell sticks apart. `list({ names: true })` adds each
-name, and marks sticks something else holds as `busy`.
+name, and marks sticks as `busy` when something else holds them or their name cannot be read.
 
 ## Good to know
 

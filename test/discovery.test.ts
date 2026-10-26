@@ -211,7 +211,28 @@ describe("names across sticks", () => {
         openStick(serialPlatform(backend), { name }),
       );
       expect(error.code).toBe("NOT_FOUND");
+      expect(error.message).not.toContain("busy");
     }
+  });
+
+  test("openNameNotFoundCountsBusy", async () => {
+    const { backend, transports } = threeSticks();
+    nameStick(transports.nano, "desk");
+    backend.busy(0);
+    const one = await rejection(
+      openStick(serialPlatform(backend), { name: "desk" }),
+    );
+    expect(one.code).toBe("NOT_FOUND");
+    expect(one.message).toBe(
+      'blinkstick: no stick is named "desk" (1 stick was busy and could not be checked)',
+    );
+    backend.busy(1);
+    const two = await rejection(
+      openStick(serialPlatform(backend), { name: "desk" }),
+    );
+    expect(two.message).toBe(
+      'blinkstick: no stick is named "desk" (2 sticks were busy and could not be checked)',
+    );
   });
 
   test("openNameEmpty", async () => {
@@ -297,5 +318,22 @@ describe("names across sticks", () => {
     ]);
     expect(transports.nano.closed).toBe(true);
     expect(transports.flex.closed).toBe(true);
+  });
+
+  test("listNamedUnreadableIsBusy", async () => {
+    const { backend, transports } = threeSticks();
+    nameStick(transports.nano, "desk");
+    transports.square.fail = 3;
+    const named = await listNamed(serialPlatform(backend));
+    expect(
+      named.map(
+        (n) => `${n.serial} ${n.model} ${n.name}${n.busy ? " busy" : ""}`,
+      ),
+    ).toEqual([
+      "BS072777-3.0 nano desk",
+      "BS073788-3.1 square  busy",
+      "BS000002-3.0 unknown ",
+    ]);
+    expect(transports.square.closed).toBe(true);
   });
 });
