@@ -2,8 +2,15 @@
 
 import { describe, expect, test } from "vitest";
 import type { Color } from "../src/color.js";
-import { list, listNamed, openStick, wrapHandle } from "../src/discovery.js";
+import {
+  applyModelHint,
+  list,
+  listNamed,
+  openStick,
+  wrapHandle,
+} from "../src/discovery.js";
 import { BlinkStickError } from "../src/errors.js";
+import type { Model } from "../src/models.js";
 import type { Identity } from "../src/transport.js";
 import {
   FakeBackend,
@@ -131,6 +138,17 @@ describe("discovery", () => {
 });
 
 describe("model hint", () => {
+  test("invalidHintRejected", () => {
+    expect(() => applyModelHint("nano", "unknown")).toThrow(TypeError);
+    expect(() => applyModelHint("nano", "unknown")).toThrow(
+      "expected nano or square",
+    );
+    expect(() => applyModelHint("unknown", "flex" as Model)).toThrow(TypeError);
+    expect(() => applyModelHint("unknown", "flex" as Model)).toThrow(
+      "expected nano or square",
+    );
+  });
+
   const plain: Identity = {
     product: "BlinkStick",
     manufacturer: "Agile Innovative Ltd",
@@ -211,7 +229,45 @@ describe("names across sticks", () => {
         openStick(serialPlatform(backend), { name }),
       );
       expect(error.code).toBe("NOT_FOUND");
+      expect(error.message).not.toContain("busy");
     }
+  });
+
+  test("openNameNotFoundCountsBusy", async () => {
+    const { backend, transports } = threeSticks();
+    nameStick(transports.nano, "desk");
+    backend.busy(0);
+    const one = await rejection(
+      openStick(serialPlatform(backend), { name: "desk" }),
+    );
+    expect(one.code).toBe("NOT_FOUND");
+    expect(one.message).toBe(
+      'blinkstick: no stick is named "desk" (1 stick was busy and could not be checked)',
+    );
+    backend.busy(1);
+    const two = await rejection(
+      openStick(serialPlatform(backend), { name: "desk" }),
+    );
+    expect(two.message).toBe(
+      'blinkstick: no stick is named "desk" (2 sticks were busy and could not be checked)',
+    );
+  });
+
+  test("openNameNotFoundCountsUnreadable", async () => {
+    const { backend, transports } = threeSticks();
+    nameStick(transports.nano, "desk");
+    transports.square.fail = 3;
+    const error = await rejection(
+      openStick(serialPlatform(backend), { name: "shelf" }),
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    expect(error.message).toBe(
+      'blinkstick: no stick is named "shelf" (1 stick was busy and could not be checked)',
+    );
+    expect(error.cause).toBeInstanceOf(Error);
+    expect((error.cause as Error).message).toContain(
+      "reading name of BS073788-3.1",
+    );
   });
 
   test("openNameEmpty", async () => {
@@ -297,5 +353,22 @@ describe("names across sticks", () => {
     ]);
     expect(transports.nano.closed).toBe(true);
     expect(transports.flex.closed).toBe(true);
+  });
+
+  test("listNamedUnreadableIsBusy", async () => {
+    const { backend, transports } = threeSticks();
+    nameStick(transports.nano, "desk");
+    transports.square.fail = 3;
+    const named = await listNamed(serialPlatform(backend));
+    expect(
+      named.map(
+        (n) => `${n.serial} ${n.model} ${n.name}${n.busy ? " busy" : ""}`,
+      ),
+    ).toEqual([
+      "BS072777-3.0 nano desk",
+      "BS073788-3.1 square  busy",
+      "BS000002-3.0 unknown ",
+    ]);
+    expect(transports.square.closed).toBe(true);
   });
 });

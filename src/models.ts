@@ -40,6 +40,16 @@ const MODELS: Readonly<Record<Exclude<Model, "unknown">, ModelRow>> = {
   square: { leds: 8, modes: WS_MODES, major: "3", release: 0x0201 },
 };
 
+/** The known models, in the order `detectFromSerial` tries them. */
+export const MODEL_NAMES: readonly Exclude<Model, "unknown">[] = Object.keys(
+  MODELS,
+) as Exclude<Model, "unknown">[];
+
+/** The part of a serial after the first dash, such as "3.0", or "". */
+export function serialVersion(serial: string): string {
+  return serial.split("-").slice(1).join("-");
+}
+
 /** Addressable LEDs on channel 0. Zero for an unknown model. */
 export function ledCount(model: Model): number {
   return model === "unknown" ? 0 : MODELS[model].leds;
@@ -52,9 +62,8 @@ export function supportsMode(model: Model, mode: Mode): boolean {
 
 /** Identifies a model from its serial (such as "BS072777-3.0") and bcdDevice. */
 export function detectFromSerial(serial: string, release: number): Model {
-  const version = serial.split("-").slice(1).join("-");
-  const major = version.split(".")[0];
-  for (const name of ["nano", "square"] as const) {
+  const major = serialVersion(serial).split(".")[0];
+  for (const name of MODEL_NAMES) {
     const row = MODELS[name];
     if (row.major === major && row.release === release) return name;
   }

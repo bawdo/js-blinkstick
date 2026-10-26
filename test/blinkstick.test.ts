@@ -83,6 +83,15 @@ describe("BlinkStick", () => {
     expect(ft.frame(8)).toEqual(fill(8, { r: 128, g: 128, b: 128 }));
   });
 
+  test("brightnessLimit quotes a string in its TypeError", () => {
+    const { stick } = open("nano");
+    expect(() => {
+      stick.brightnessLimit = "10" as unknown as number;
+    }).toThrow(
+      new TypeError('blinkstick: brightnessLimit must be a number, got "10"'),
+    );
+  });
+
   test("brightnessLimit rejects non-integers and out of range values", () => {
     const { stick } = open("nano");
     for (const bad of [-1, 256, 12.5, Number.NaN, Infinity]) {
@@ -237,6 +246,15 @@ describe("BlinkStick", () => {
       expect(stick.inverted).toBe(true);
       // Setting it does not repaint.
       expect(ft.sendCount()).toBe(0);
+    });
+
+    test("inverted quotes a string in the error", async () => {
+      const { stick } = open("nano");
+      expect(() => {
+        stick.inverted = "true" as unknown as boolean;
+      }).toThrow(
+        new TypeError('blinkstick: inverted must be a boolean, got "true"'),
+      );
     });
 
     test("inverseOffByDefault", async () => {

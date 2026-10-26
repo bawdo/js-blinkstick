@@ -1,4 +1,5 @@
 import type { Color } from "./color.js";
+import { DEFAULT_MS } from "./effects.js";
 
 function describe(value: unknown): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
@@ -72,4 +73,45 @@ export function assertInfoBlock(n: unknown): asserts n is 1 | 2 {
   if (n !== 1 && n !== 2) {
     throw new RangeError(`blinkstick: info block ${n} is not 1 or 2`);
   }
+}
+
+/** Throws a TypeError unless `v` is a boolean. */
+export function assertBoolean(v: unknown, label: string): asserts v is boolean {
+  if (typeof v !== "boolean") {
+    throw new TypeError(
+      `blinkstick: ${label} must be a boolean, got ${describe(v)}`,
+    );
+  }
+}
+
+/** Validates a millisecond option: finite, and above 0 unless `allowZero`. */
+export function checkMs(
+  value: number | undefined,
+  label: string,
+  allowZero: boolean,
+): number {
+  if (value === undefined) return DEFAULT_MS;
+  if (typeof value !== "number") {
+    throw new TypeError(`blinkstick: ${label} must be a number`);
+  }
+  if (!Number.isFinite(value) || value < 0 || (value === 0 && !allowZero)) {
+    throw new RangeError(
+      `blinkstick: ${label} must be a finite number ${allowZero ? "of at least 0" : "above 0"}, got ${value}`,
+    );
+  }
+  return value;
+}
+
+/** Validates `iterations`: an integer of at least 1. */
+export function checkIterations(value: number | undefined): number {
+  if (value === undefined) return 1;
+  if (typeof value !== "number") {
+    throw new TypeError("blinkstick: iterations must be a number");
+  }
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError(
+      `blinkstick: iterations must be an integer of at least 1, got ${value}`,
+    );
+  }
+  return value;
 }

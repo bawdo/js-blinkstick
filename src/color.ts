@@ -7,15 +7,16 @@ export type Color = {
   readonly b: number;
 };
 
-function make(r: number, g: number, b: number): Color {
+/** Builds a frozen colour from three channels, with no range check. */
+export function rgb(r: number, g: number, b: number): Color {
   return Object.freeze({ r, g, b });
 }
 
 /** All channels off. */
-export const OFF: Color = make(0, 0, 0);
+export const OFF: Color = rgb(0, 0, 0);
 
 /** All channels at full. Internal, not exported from the package entry. */
-export const WHITE: Color = make(255, 255, 255);
+export const WHITE: Color = rgb(255, 255, 255);
 
 function invalid(input: string): TypeError {
   return new TypeError(`blinkstick: invalid colour ${JSON.stringify(input)}`);
@@ -28,7 +29,7 @@ function parseHex(input: string, hex: string): Color {
   }
   if (!/^[0-9a-fA-F]{6}$/.test(digits)) throw invalid(input);
   const n = Number.parseInt(digits, 16);
-  return make((n >> 16) & 255, (n >> 8) & 255, n & 255);
+  return rgb((n >> 16) & 255, (n >> 8) & 255, n & 255);
 }
 
 /**
@@ -60,18 +61,18 @@ export function parseColor(input: string): Color {
     if (!(n >= 0 && n <= 255)) throw invalid(s);
     return n;
   });
-  return make(v[0] ?? 0, v[1] ?? 0, v[2] ?? 0);
+  return rgb(v[0] ?? 0, v[1] ?? 0, v[2] ?? 0);
 }
 
 /** Caps each channel at limit, keeping the hue: floor(v * limit / 255). */
 export function scale(color: Color, limit: number): Color {
   const f = (v: number): number => Math.floor((v * limit) / 255);
-  return make(f(color.r), f(color.g), f(color.b));
+  return rgb(f(color.r), f(color.g), f(color.b));
 }
 
 /** Returns the colour with each channel flipped: 255 - v. */
 export function invert(color: Color): Color {
-  return make(255 - color.r, 255 - color.g, 255 - color.b);
+  return rgb(255 - color.r, 255 - color.g, 255 - color.b);
 }
 
 /** Returns the colour as lower case "#rrggbb". */

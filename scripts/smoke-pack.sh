@@ -14,7 +14,9 @@ tarball=$(ls "$work"/pack/*.tgz)
 
 cd "$work/project"
 npm init -y >/dev/null
-npm i "$tarball" node-hid
+# Use the node-hid version the root lockfile pins, not the latest.
+hid=$(node -p 'require(process.argv[1]).packages["node_modules/node-hid"].version' "$root/package-lock.json")
+npm i "$tarball" "node-hid@$hid"
 node --input-type=module -e "await import('@bawdo/blinkstick'); await import('@bawdo/blinkstick/node'); await import('@bawdo/blinkstick/webhid'); console.log('smoke: imports ok')"
 
 if [ "${SMOKE_HARDWARE:-}" = "1" ]; then

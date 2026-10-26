@@ -2,7 +2,7 @@ import type { BlinkStick, BlinkStickInfo } from "./blinkstick.js";
 import type { NamedInfo, Platform } from "./discovery.js";
 import { listNamed, list as listSticks, openStick } from "./discovery.js";
 import { BlinkStickError } from "./errors.js";
-import { detectFromSerial } from "./models.js";
+import { detectFromSerial, serialVersion } from "./models.js";
 import { hidBackend } from "./node/backend.js";
 import type { Identity } from "./transport.js";
 
@@ -27,7 +27,7 @@ const platform: Platform<string, NodeBlinkStickInfo> = {
       product: identity.product,
       manufacturer: identity.manufacturer,
       serial,
-      version: serial.split("-").slice(1).join("-"),
+      version: serialVersion(serial),
       release,
     };
   },

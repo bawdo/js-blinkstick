@@ -9,7 +9,46 @@ permissions:
   contents: read
 
 jobs:
+  # Installs, checks and packs the library with no publish credential in
+  # reach, so a compromised dependency or build step cannot mint one.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # The tag must name the version being published.
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      # No dependency needs its install scripts for the checks to pass, so
+      # skip them and give a compromised package one less way in.
+      - run: npm ci --ignore-scripts
+      # CI checks, the same script as ci.yml.
+      - run: npm run verify
+      - run: npm pack
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: "*.tgz"
+          if-no-files-found: error
+          retention-days: 1
+
+  # Publishes the tarball the build job checked. It runs no repository code
+  # and installs nothing, so the OIDC token only ever meets npm itself.
   publish:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The npm environment only accepts v* tags, and the npm trusted publisher
@@ -19,9 +58,9 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          persist-credentials: false
+          name: package
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -35,23 +74,19 @@ jobs:
             echo "::error::npm $version is older than 11.5.1, which trusted publishing needs"
             exit 1
           fi
-      # The tag must name the version being published.
-      - name: Check the tag matches package.json
+      - name: Publish the expected tarball
+        # Publish exactly the tarball this tag should have produced, so a
+        # stray file in the artifact can never be published instead.
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          version="$(node -p 'require("./package.json").version')"
-          if [ "$tag" != "$version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+          file="bawdo-blinkstick-${GITHUB_REF_NAME#v}.tgz"
+          if [ ! -f "$file" ]; then
+            echo "::error::expected $file was not found"
             exit 1
           fi
-      - run: npm ci
-      # CI checks, the same steps as ci.yml.
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npm run check:package
-      - run: npm run check:bundle
-      - run: npm run check:types
-      - run: node scripts/check-declarations.mjs
-      - run: npm publish
+          for f in ./*.tgz; do
+            if [ "$f" != "./$file" ]; then
+              echo "::error::unexpected tarball $f"
+              exit 1
+            fi
+          done
+          npm publish "./$file"

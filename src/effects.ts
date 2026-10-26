@@ -59,35 +59,3 @@ export function lerp(a: Color, b: Color, step: number, steps: number): Color {
     x + Math.trunc(((y - x) * step) / steps);
   return { r: f(a.r, b.r), g: f(a.g, b.g), b: f(a.b, b.b) };
 }
-
-/** Validates a millisecond option: finite, and above 0 unless `allowZero`. */
-export function checkMs(
-  value: number | undefined,
-  label: string,
-  allowZero: boolean,
-): number {
-  if (value === undefined) return DEFAULT_MS;
-  if (typeof value !== "number") {
-    throw new TypeError(`blinkstick: ${label} must be a number`);
-  }
-  if (!Number.isFinite(value) || value < 0 || (value === 0 && !allowZero)) {
-    throw new RangeError(
-      `blinkstick: ${label} must be a finite number ${allowZero ? "of at least 0" : "above 0"}, got ${value}`,
-    );
-  }
-  return value;
-}
-
-/** Validates `iterations`: an integer of at least 1. */
-export function checkIterations(value: number | undefined): number {
-  if (value === undefined) return 1;
-  if (typeof value !== "number") {
-    throw new TypeError("blinkstick: iterations must be a number");
-  }
-  if (!Number.isInteger(value) || value < 1) {
-    throw new RangeError(
-      `blinkstick: iterations must be an integer of at least 1, got ${value}`,
-    );
-  }
-  return value;
-}

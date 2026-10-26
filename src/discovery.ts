@@ -2,7 +2,9 @@ import type { BlinkStickInfo } from "./blinkstick.js";
 import { BlinkStick } from "./blinkstick.js";
 import { BlinkStickError } from "./errors.js";
 import type { Model } from "./models.js";
+import { MODEL_NAMES } from "./models.js";
 import type { Backend, Candidate, Identity, Transport } from "./transport.js";
+import { closeQuietly } from "./transport.js";
 
 /**
  * What a platform entry gives the shared discovery code: a backend, its model
@@ -20,7 +22,10 @@ export interface Platform<H, I extends BlinkStickInfo> {
 export type NamedInfo<I> = I & {
   /** "" if none is set, or if `busy`. */
   name: string;
-  /** The stick could not be opened, for example because another process holds it. */
+  /**
+   * The stick could not be opened or its name could not be read, for example
+   * because another process holds it.
+   */
   busy: boolean;
 };
 
@@ -43,8 +48,6 @@ export interface Previous<H> {
   hint?: Model;
 }
 
-const HINTS: readonly Model[] = ["nano", "square"];
-
 /**
  * The model hint rule, shared by every platform's `toInfo`. A hint is used
  * only when detection says 'unknown'. When detection succeeds and a hint
@@ -52,9 +55,9 @@ const HINTS: readonly Model[] = ["nano", "square"];
  */
 export function applyModelHint(detected: Model, hint?: Model): Model {
   if (hint === undefined) return detected;
-  if (!HINTS.includes(hint)) {
+  if (!MODEL_NAMES.some((name) => name === hint)) {
     throw new TypeError(
-      `blinkstick: unknown model hint ${String(hint)}, expected nano or square`,
+      `blinkstick: unknown model hint ${String(hint)}, expected ${MODEL_NAMES.join(" or ")}`,
     );
   }
   if (detected === "unknown") return hint;
@@ -78,7 +81,8 @@ export async function list<H, I extends BlinkStickInfo>(
 /**
  * Every attached stick with its name. Opens each stick in turn to read the
  * name and closes it again, so it is slower than `list`. Sticks it cannot
- * open, including any this process already has open, are listed as busy.
+ * open or whose name it cannot read, including any this process already has
+ * open, are listed as busy.
  */
 export async function listNamed<H, I extends BlinkStickInfo>(
   p: Platform<H, I>,
@@ -97,10 +101,10 @@ export async function listNamed<H, I extends BlinkStickInfo>(
     let name: string;
     try {
       name = await readName(transport, info);
-    } catch (error) {
-      throw new Error(`blinkstick: reading name of ${describe(c.identity)}`, {
-        cause: error,
-      });
+    } catch {
+      // readName has already closed the transport.
+      named.push({ ...info, name: "", busy: true });
+      continue;
     }
     named.push({ ...info, name, busy: false });
   }
@@ -215,17 +219,20 @@ async function openByName<H, I extends BlinkStickInfo>(
   const candidates = await p.backend.list();
   const matches: { candidate: Candidate<H>; transport: Transport }[] = [];
   const readErrors: Error[] = [];
+  let busy = 0;
   for (const c of candidates) {
     let transport: Transport;
     try {
       transport = await p.backend.open(c.handle);
     } catch {
+      busy++;
       continue;
     }
     let got: string;
     try {
       got = await readName(transport, p.toInfo(c.identity), true);
     } catch (error) {
+      busy++;
       readErrors.push(
         new Error(`blinkstick: reading name of ${describe(c.identity)}`, {
           cause: error,
@@ -247,9 +254,13 @@ async function openByName<H, I extends BlinkStickInfo>(
         : readErrors.length === 1
           ? readErrors[0]
           : new AggregateError(readErrors, "blinkstick: some names unreadable");
+    const skipped =
+      busy === 0
+        ? ""
+        : ` (${busy} ${busy === 1 ? "stick was" : "sticks were"} busy and could not be checked)`;
     throw new BlinkStickError(
       "NOT_FOUND",
-      `blinkstick: no stick is named ${JSON.stringify(name)}`,
+      `blinkstick: no stick is named ${JSON.stringify(name)}${skipped}`,
       cause === undefined ? undefined : { cause },
     );
   }
@@ -365,14 +376,6 @@ async function readName(
   } catch (error) {
     await closeQuietly(transport);
     throw error;
-  }
-}
-
-async function closeQuietly(transport: Transport): Promise<void> {
-  try {
-    await transport.close();
-  } catch {
-    // The transport is being dropped, so a failed close changes nothing.
   }
 }
 

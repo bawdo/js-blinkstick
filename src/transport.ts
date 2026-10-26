@@ -61,3 +61,12 @@ export function stripReportId(
     `blinkstick: report ${reportId} expected ${length} bytes, got ${bytes.length}`,
   );
 }
+
+/** Closes `transport`, ignoring any error. */
+export async function closeQuietly(transport: Transport): Promise<void> {
+  try {
+    await transport.close();
+  } catch {
+    // The transport is being dropped, so a failed close changes nothing.
+  }
+}
