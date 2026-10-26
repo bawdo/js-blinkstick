@@ -1,7 +1,21 @@
 {
   "name": "@bawdo/blinkstick",
-  "version": "0.0.0",
-  "description": "Drive BlinkStick Nano and Square from the browser (WebHID) and Node (node-hid).",
+  "version": "0.1.0",
+  "description": "Drive BlinkStick Nano and Square USB LEDs from the browser (WebHID) and Node (node-hid).",
+  "keywords": [
+    "blinkstick",
+    "led",
+    "usb",
+    "hid",
+    "webhid",
+    "node-hid",
+    "nano",
+    "square"
+  ],
+  "homepage": "https://github.com/bawdo/js-blinkstick#readme",
+  "bugs": {
+    "url": "https://github.com/bawdo/js-blinkstick/issues"
+  },
   "type": "module",
   "types": "./dist/index.d.ts",
   "exports": {

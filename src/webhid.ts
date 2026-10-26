@@ -35,18 +35,22 @@ export interface HidOption {
   hid?: HID;
 }
 
+/** Options for `open`. */
 export interface OpenOptions extends HidOption {
   /** Opens the one paired stick whose stored name is exactly this. */
   name?: string;
   /**
-   * The model to assume when detection says 'unknown'. A hint that disagrees
-   * with detection rejects UNSUPPORTED_MODEL, naming both.
+   * The model to assume when detection says 'unknown'. It is used only then.
+   * A hint that disagrees with a detected model rejects with
+   * UNSUPPORTED_MODEL, naming both. Without a hint, a stick that detection
+   * cannot place is refused as an unsupported model.
    */
   model?: Model;
 }
 
+/** Options for `fromHIDDevice`. */
 export interface FromHIDDeviceOptions extends HidOption {
-  /** As for `open`. */
+  /** The model to assume when detection says 'unknown'. As for `open`. */
   model?: Model;
 }
 
@@ -85,7 +89,9 @@ function platformFor(hid: HID): Platform<HIDDevice, WebHidBlinkStickInfo> {
 
 /**
  * Shows Chrome's picker filtered to BlinkSticks and returns info for the
- * sticks chosen. Call it from a user gesture in a visible page.
+ * sticks chosen. It needs a user gesture (such as a click) in a visible page,
+ * so it does not work from an extension popup or a service worker. Pairing
+ * persists, so later `list` and `open` calls see the stick without it.
  */
 export async function pair(
   options?: HidOption,
@@ -96,7 +102,10 @@ export async function pair(
   return candidatesOf(chosen).map((c) => p.toInfo(c.identity));
 }
 
-/** Every paired, plugged in stick, including unsupported models. */
+/**
+ * Every paired, plugged in stick, including unsupported models. Sticks that
+ * were never paired do not appear: call `pair` first.
+ */
 export function list(options?: HidOption): Promise<WebHidBlinkStickInfo[]>;
 /** The same, with each stick's stored name and a `busy` flag. */
 export function list(
@@ -109,7 +118,11 @@ export async function list(
   return options?.names ? listNamed(p) : listSticks(p);
 }
 
-/** Opens the first paired stick, or the one named `name`. */
+/**
+ * Opens the first paired stick, or the one named `name`. Rejects with
+ * NOT_FOUND if there is none. If the stick is later unplugged, the next call
+ * reopens it by matching the same device, then its stored name, then its model.
+ */
 export async function open(
   options: OpenOptions = {},
 ): Promise<BlinkStick<WebHidBlinkStickInfo>> {
@@ -124,6 +137,9 @@ export async function open(
  * Wraps a `HIDDevice` the caller already has, for code that does its own
  * pairing. It opens the device if it is not open yet. The `hid` object is
  * still needed, to watch for disconnects and to find the stick again.
+ *
+ * The stick takes ownership of the `HIDDevice`: calling `close()` on the stick
+ * closes the caller's device, so do not keep using it.
  */
 export async function fromHIDDevice(
   device: HIDDevice,

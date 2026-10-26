@@ -19,8 +19,11 @@ import { assertColor, assertIndex, assertInfoBlock } from "./validate.js";
 
 /** What the library knows about a stick without opening a report. */
 export interface BlinkStickInfo {
+  /** The detected model, or 'unknown' for an unsupported product. */
   model: Model;
+  /** The USB product string, such as "BlinkStick Nano". */
   product: string;
+  /** The USB manufacturer string. Always "" in the browser. */
   manufacturer: string;
 }
 
@@ -53,9 +56,17 @@ function infoReportId(block: 1 | 2): number {
  * An open BlinkStick. Calls are queued and run one at a time, in call order, so
  * they are safe to fire without awaiting each. Two effects running at once on
  * one stick interleave their frames.
+ *
+ * If a transfer fails, the stick reopens itself and repaints the last frame
+ * written. Node finds it again by serial, so a stick with no serial cannot be
+ * reconnected. The browser matches the same device, then the stored name, then
+ * the model. If it cannot be found, calls reject with DISCONNECTED and the next
+ * call tries again. `brightnessLimit` and `inverted` carry over.
  */
 export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
+  /** What the library knows about this stick. Fixed when it was opened. */
   readonly info: I;
+  /** How many LEDs the model has: 2 on a Nano, 8 on a Square. */
   readonly ledCount: number;
   /**
    * Flips every channel written from now on to 255 - v, after the brightness
@@ -110,7 +121,12 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     this.#brightnessLimit = limit;
   }
 
-  /** Releases the stick. A second call rejects with CLOSED. */
+  /**
+   * Releases the stick. A second call rejects with CLOSED. Work already queued
+   * runs first. An effect (blink, pulse or morph) in progress can stay pending
+   * for up to one step after this resolves, then rejects with CLOSED. On a
+   * stick made by the browser entry's `fromHIDDevice` this closes the caller's own device object.
+   */
   close(): Promise<void> {
     return this.#run(async () => {
       this.#assertOpen();

@@ -35,7 +35,10 @@ const platform: Platform<string, NodeBlinkStickInfo> = {
   key: (identity: Identity): string | undefined => identity.serial || undefined,
 };
 
-/** Every attached stick, including unsupported models. */
+/**
+ * Every attached stick, including unsupported models. Needs the optional
+ * `node-hid` package installed.
+ */
 export function list(): Promise<NodeBlinkStickInfo[]>;
 /** The same, with each stick's stored name and a `busy` flag. */
 export function list(options: {
@@ -49,7 +52,9 @@ export function list(options?: {
 
 /**
  * Opens the first stick, the one with this `serial`, or the one named `name`.
- * Passing both is a TypeError.
+ * Passing both is a TypeError. If the stick is later unplugged, the next call
+ * finds it again by serial and repaints the last frame. A stick with no serial
+ * cannot be reconnected.
  */
 export async function open(
   options: { serial?: string; name?: string } = {},
