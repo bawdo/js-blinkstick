@@ -28,3 +28,4 @@ jobs:
       - run: npm run check:package
       - run: npm run check:bundle
       - run: npm run check:types
+      - run: node scripts/check-declarations.mjs

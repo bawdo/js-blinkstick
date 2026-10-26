@@ -45,7 +45,7 @@
     "typecheck": "tsc --noEmit",
     "check:package": "publint && attw --pack --profile esm-only",
     "check:bundle": "node scripts/check-bundle.mjs",
-    "check:types": "tsc -p test/types/node-consumer && tsc -p test/types/browser-consumer",
+    "check:types": "tsc -p test/types/node-consumer && tsc -p test/types/browser-consumer && tsc -p test/types/browser-consumer-no-types && node scripts/check-declarations.mjs",
     "test:browser": "vite test-page"
   },
   "peerDependencies": {
