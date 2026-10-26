@@ -90,6 +90,11 @@ describe("BlinkStick", () => {
         stick.brightnessLimit = bad;
       }).toThrow(RangeError);
     }
+    for (const bad of ["128", null, undefined, true, {}]) {
+      expect(() => {
+        stick.brightnessLimit = bad as unknown as number;
+      }).toThrow(TypeError);
+    }
     expect(stick.brightnessLimit).toBe(255);
     stick.brightnessLimit = 0;
     expect(stick.brightnessLimit).toBe(0);
@@ -220,6 +225,20 @@ describe("BlinkStick", () => {
   });
 
   describe("inverted", () => {
+    test("inverted rejects a non-boolean with TypeError", async () => {
+      const { stick, ft } = open("nano");
+      for (const bad of [1, 0, "true", null, undefined, {}]) {
+        expect(() => {
+          stick.inverted = bad as unknown as boolean;
+        }).toThrow(TypeError);
+      }
+      expect(stick.inverted).toBe(false);
+      stick.inverted = true;
+      expect(stick.inverted).toBe(true);
+      // Setting it does not repaint.
+      expect(ft.sendCount()).toBe(0);
+    });
+
     test("inverseOffByDefault", async () => {
       const { stick, ft } = open("nano");
       await stick.setAll({ r: 255, g: 0, b: 0 });
@@ -370,6 +389,16 @@ describe("BlinkStick", () => {
       await stick[Symbol.asyncDispose]();
       expect(ft.closed).toBe(true);
       await expect(stick.off()).rejects.toMatchObject({ code: "CLOSED" });
+    },
+  );
+
+  test.skipIf(!Symbol.asyncDispose)(
+    "asyncDispose after close resolves, while a second close rejects CLOSED",
+    async () => {
+      const { stick } = open("nano");
+      await stick.close();
+      await expect(stick[Symbol.asyncDispose]()).resolves.toBeUndefined();
+      await expect(stick.close()).rejects.toMatchObject({ code: "CLOSED" });
     },
   );
 });

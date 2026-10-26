@@ -68,14 +68,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   readonly info: I;
   /** How many LEDs the model has: 2 on a Nano, 8 on a Square. */
   readonly ledCount: number;
-  /**
-   * Flips every channel written from now on to 255 - v, after the brightness
-   * limit, for LEDs wired so that 255 means off. Reads flip back, so they return
-   * what was written. It does not repaint the LEDs, so set it before setting
-   * them.
-   */
-  inverted: boolean = false;
-
+  #inverted = false;
   #brightnessLimit = 255;
   /** Undefined only while disconnected, and only on a stick that can reopen. */
   #transport: Transport | undefined;
@@ -99,21 +92,41 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   }
 
   /**
+   * Flips every channel written from now on to 255 - v, after the brightness
+   * limit, for LEDs wired so that 255 means off. Reads flip back, so they return
+   * what was written. It does not repaint the LEDs, so set it before setting
+   * them. Setting a non-boolean throws TypeError.
+   */
+  get inverted(): boolean {
+    return this.#inverted;
+  }
+
+  set inverted(inverted: boolean) {
+    if (typeof inverted !== "boolean") {
+      throw new TypeError(
+        `blinkstick: inverted must be a boolean, got ${String(inverted)}`,
+      );
+    }
+    this.#inverted = inverted;
+  }
+
+  /**
    * Caps every channel written from now on, scaling each as v * limit / 255.
    * An integer from 0 to 255, where the default 255 means no limit. Reads
-   * return the scaled values stored on the stick.
+   * return the scaled values stored on the stick. Setting a non-number throws
+   * TypeError, and any other value outside that range throws RangeError.
    */
   get brightnessLimit(): number {
     return this.#brightnessLimit;
   }
 
   set brightnessLimit(limit: number) {
-    if (
-      typeof limit !== "number" ||
-      !Number.isInteger(limit) ||
-      limit < 0 ||
-      limit > 255
-    ) {
+    if (typeof limit !== "number") {
+      throw new TypeError(
+        `blinkstick: brightnessLimit must be a number, got ${String(limit)}`,
+      );
+    }
+    if (!Number.isInteger(limit) || limit < 0 || limit > 255) {
       throw new RangeError(
         `blinkstick: brightnessLimit must be an integer from 0 to 255, got ${String(limit)}`,
       );
@@ -354,7 +367,11 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     });
   }
 
-  /** Closes the stick, so that `await using` works. Present where the runtime defines the symbol. */
+  /**
+   * Closes the stick, so that `await using` works. Unlike `close()`, it
+   * resolves if the stick is already closed. Present where the runtime defines
+   * the symbol.
+   */
   declare [Symbol.asyncDispose]: () => Promise<void>;
 
   #assertOpen(): void {
@@ -564,8 +581,14 @@ async function closeQuietly(transport: Transport): Promise<void> {
 // get a method named "undefined". The class body declares the type.
 if (typeof Symbol.asyncDispose === "symbol") {
   Object.defineProperty(BlinkStick.prototype, Symbol.asyncDispose, {
-    value: function asyncDispose(this: BlinkStick): Promise<void> {
-      return this.close();
+    value: async function asyncDispose(this: BlinkStick): Promise<void> {
+      try {
+        await this.close();
+      } catch (error) {
+        // Already closed, which is all disposal asks for.
+        if (error instanceof BlinkStickError && error.code === "CLOSED") return;
+        throw error;
+      }
     },
     writable: true,
     configurable: true,
