@@ -22,6 +22,12 @@ describe("names", () => {
     expect(await stick.getName()).toBe("office");
   });
 
+  test("wellFormedSurrogatePairRoundTrips", async () => {
+    const { stick } = open("nano");
+    await stick.setName("desk 🙂");
+    expect(await stick.getName()).toBe("desk 🙂");
+  });
+
   test("unsetIsEmpty", async () => {
     const { stick } = open("nano");
     expect(await stick.getName()).toBe("");

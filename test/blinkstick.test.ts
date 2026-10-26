@@ -83,6 +83,15 @@ describe("BlinkStick", () => {
     expect(ft.frame(8)).toEqual(fill(8, { r: 128, g: 128, b: 128 }));
   });
 
+  test("brightnessLimit quotes a string in its TypeError", () => {
+    const { stick } = open("nano");
+    expect(() => {
+      stick.brightnessLimit = "10" as unknown as number;
+    }).toThrow(
+      new TypeError('blinkstick: brightnessLimit must be a number, got "10"'),
+    );
+  });
+
   test("brightnessLimit rejects non-integers and out of range values", () => {
     const { stick } = open("nano");
     for (const bad of [-1, 256, 12.5, Number.NaN, Infinity]) {

@@ -2,6 +2,7 @@
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "isolatedDeclarations": true,
@@ -9,7 +10,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2024"],
     "types": ["node"],
     "noEmit": true,
     "skipLibCheck": true

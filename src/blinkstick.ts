@@ -2,7 +2,7 @@
 import type { Color } from "./color.js";
 import { invert, OFF, scale } from "./color.js";
 import type { BlinkOptions, MorphOptions, PulseOptions } from "./effects.js";
-import { checkIterations, checkMs, lerp, STEP_MS, sleep } from "./effects.js";
+import { lerp, STEP_MS, sleep } from "./effects.js";
 import { BlinkStickError } from "./errors.js";
 import type { Mode, Model } from "./models.js";
 import { byteToMode, ledCount, modeToByte, supportsMode } from "./models.js";
@@ -15,7 +15,15 @@ import {
 } from "./protocol.js";
 import { createQueue } from "./queue.js";
 import type { Transport } from "./transport.js";
-import { assertColor, assertIndex, assertInfoBlock } from "./validate.js";
+import {
+  assertBoolean,
+  assertByte,
+  assertColor,
+  assertIndex,
+  assertInfoBlock,
+  checkIterations,
+  checkMs,
+} from "./validate.js";
 
 /** What the library knows about a stick without opening a report. */
 export interface BlinkStickInfo {
@@ -45,8 +53,6 @@ const TRANSFER_ATTEMPTS = 3;
 const INFO_BLOCK_SIZE = REPORT_LENGTH[2];
 /** Names live in info block 1, as the official BlinkStick tools do. */
 const NAME_BLOCK = 1;
-const LONE_SURROGATE =
-  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 function infoReportId(block: 1 | 2): number {
   return block === 1 ? REPORT.info1 : REPORT.info2;
@@ -102,11 +108,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   }
 
   set inverted(inverted: boolean) {
-    if (typeof inverted !== "boolean") {
-      throw new TypeError(
-        `blinkstick: inverted must be a boolean, got ${String(inverted)}`,
-      );
-    }
+    assertBoolean(inverted, "inverted");
     this.#inverted = inverted;
   }
 
@@ -121,16 +123,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   }
 
   set brightnessLimit(limit: number) {
-    if (typeof limit !== "number") {
-      throw new TypeError(
-        `blinkstick: brightnessLimit must be a number, got ${String(limit)}`,
-      );
-    }
-    if (!Number.isInteger(limit) || limit < 0 || limit > 255) {
-      throw new RangeError(
-        `blinkstick: brightnessLimit must be an integer from 0 to 255, got ${String(limit)}`,
-      );
-    }
+    assertByte(limit, "brightnessLimit");
     this.#brightnessLimit = limit;
   }
 
@@ -317,7 +310,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     if (typeof name !== "string") {
       throw new TypeError("blinkstick: name must be a string");
     }
-    if (name.includes("\0") || LONE_SURROGATE.test(name)) {
+    if (name.includes("\0") || !name.isWellFormed()) {
       throw new TypeError(
         "blinkstick: name must be valid UTF-8 without NUL characters",
       );
