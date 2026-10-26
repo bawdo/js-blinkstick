@@ -61,3 +61,15 @@ export function assertByte(n: unknown, label: string): asserts n is number {
     );
   }
 }
+
+/** Throws a TypeError unless `n` is a number, and a RangeError unless it is exactly 1 or 2. */
+export function assertInfoBlock(n: unknown): asserts n is 1 | 2 {
+  if (typeof n !== "number") {
+    throw new TypeError(
+      `blinkstick: info block must be a number, got ${describe(n)}`,
+    );
+  }
+  if (n !== 1 && n !== 2) {
+    throw new RangeError(`blinkstick: info block ${n} is not 1 or 2`);
+  }
+}

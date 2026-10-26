@@ -2,8 +2,8 @@
 import type { Color } from "./color.js";
 import { invert, OFF, scale } from "./color.js";
 import { BlinkStickError } from "./errors.js";
-import type { Model } from "./models.js";
-import { ledCount } from "./models.js";
+import type { Mode, Model } from "./models.js";
+import { byteToMode, ledCount, modeToByte, supportsMode } from "./models.js";
 import {
   decodeFrame,
   encodeFrame,
@@ -13,7 +13,7 @@ import {
 } from "./protocol.js";
 import { createQueue } from "./queue.js";
 import type { Transport } from "./transport.js";
-import { assertColor, assertIndex } from "./validate.js";
+import { assertColor, assertIndex, assertInfoBlock } from "./validate.js";
 
 /** What the library knows about a stick without opening a report. */
 export interface BlinkStickInfo {
@@ -31,6 +31,16 @@ export interface StickOptions<I extends BlinkStickInfo> {
 
 /** Covers the firmware being busy straight after a write, and flaky macOS sets. */
 const TRANSFER_ATTEMPTS = 3;
+
+const INFO_BLOCK_SIZE = REPORT_LENGTH[2];
+/** Names live in info block 1, as the official BlinkStick tools do. */
+const NAME_BLOCK = 1;
+const LONE_SURROGATE =
+  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+
+function infoReportId(block: 1 | 2): number {
+  return block === 1 ? REPORT.info1 : REPORT.info2;
+}
 
 /**
  * An open BlinkStick. Calls are queued and run one at a time, in call order, so
@@ -54,8 +64,8 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
   readonly #run = createQueue();
   /** Last frame written, scaled and before flipping. */
   #lastFrame: Color[] | undefined;
-  /** Set from Task 5 onwards, for reconnecting by name. */
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: used from Task 5
+  /** Last name read or written, for reconnecting by name. */
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read by the reconnect in Task 7
   #knownName: string | undefined;
   readonly #reopen:
     | ((knownName: string | undefined) => Promise<Transport>)
@@ -168,6 +178,102 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
     });
   }
 
+  /**
+   * Reads user data block 1 or 2 from the stick's EEPROM, with trailing NUL
+   * bytes removed. Data that ends in NUL bytes does not round-trip.
+   */
+  async getInfoBlock(block: 1 | 2): Promise<Uint8Array> {
+    assertInfoBlock(block);
+    return this.#run(() => this.#readInfoBlock(block));
+  }
+
+  /**
+   * Writes up to 32 bytes to user data block 1 or 2, zero padded. This writes
+   * EEPROM, which wears with use, so do not call it in a loop.
+   */
+  async setInfoBlock(block: 1 | 2, data: Uint8Array): Promise<void> {
+    assertInfoBlock(block);
+    if (!(data instanceof Uint8Array)) {
+      throw new TypeError("blinkstick: info block data must be a Uint8Array");
+    }
+    if (data.length > INFO_BLOCK_SIZE) {
+      throw new RangeError(
+        `blinkstick: info block data is ${data.length} bytes, max ${INFO_BLOCK_SIZE}`,
+      );
+    }
+    const copy = data.slice();
+    return this.#run(() => this.#writeInfoBlock(block, copy));
+  }
+
+  /** Reads the name stored in info block 1, or "" if none is set. */
+  async getName(): Promise<string> {
+    return this.#run(async () => {
+      const bytes = await this.#readInfoBlock(NAME_BLOCK);
+      const name = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      this.#knownName = name;
+      return name;
+    });
+  }
+
+  /**
+   * Stores `name` in info block 1. It must be a string of at most 32 UTF-8
+   * bytes with no NUL characters or lone surrogates. "" clears the name. This
+   * writes EEPROM, which wears with use, so do not call it in a loop.
+   */
+  async setName(name: string): Promise<void> {
+    if (typeof name !== "string") {
+      throw new TypeError("blinkstick: name must be a string");
+    }
+    if (name.includes("\0") || LONE_SURROGATE.test(name)) {
+      throw new TypeError(
+        "blinkstick: name must be valid UTF-8 without NUL characters",
+      );
+    }
+    const bytes = new TextEncoder().encode(name);
+    if (bytes.length > INFO_BLOCK_SIZE) {
+      throw new RangeError(
+        `blinkstick: name is ${bytes.length} bytes, max ${INFO_BLOCK_SIZE}`,
+      );
+    }
+    return this.#run(async () => {
+      await this.#writeInfoBlock(NAME_BLOCK, bytes);
+      this.#knownName = name;
+    });
+  }
+
+  /** Reads the LED output mode, as a name or the raw number if it has none. */
+  async getMode(): Promise<Mode | number> {
+    return this.#run(async () => byteToMode(await this.#readMode()));
+  }
+
+  /**
+   * Switches the LED output mode. Rejects with UNSUPPORTED_MODE when the model
+   * forbids `mode`, which is every mode on an unknown model. Skips the write
+   * when the stick is already in `mode`. This writes EEPROM, which wears with
+   * use, so call it once and not in a loop.
+   */
+  async setMode(mode: Mode): Promise<void> {
+    const byte = modeToByte(mode);
+    if (typeof mode !== "string" || byte < 0) {
+      throw new TypeError(
+        `blinkstick: unknown mode ${String(mode)}, expected rgb, rgb-inverse, ws2812 or ws2812-mirror`,
+      );
+    }
+    const { model } = this.info;
+    if (!supportsMode(model, mode)) {
+      throw new BlinkStickError(
+        "UNSUPPORTED_MODE",
+        `blinkstick: mode ${mode} is not supported on model ${model}`,
+      );
+    }
+    return this.#run(async () => {
+      if ((await this.#readMode()) === byte) return;
+      await this.#transfer("send", REPORT.mode, (t) =>
+        t.sendFeatureReport(REPORT.mode, Uint8Array.of(byte)),
+      );
+    });
+  }
+
   /** Closes the stick, so that `await using` works. Present where the runtime defines the symbol. */
   declare [Symbol.asyncDispose]: () => Promise<void>;
 
@@ -196,6 +302,33 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
       );
       this.#lastFrame = scaled;
     });
+  }
+
+  /** Reads an info block, trimmed of trailing NULs. Runs inside the queue. */
+  async #readInfoBlock(block: 1 | 2): Promise<Uint8Array> {
+    const id = infoReportId(block);
+    const data = await this.#transfer("get", id, (t) =>
+      t.receiveFeatureReport(id, INFO_BLOCK_SIZE),
+    );
+    let end = data.length;
+    while (end > 0 && data[end - 1] === 0) end--;
+    return data.slice(0, end);
+  }
+
+  /** Writes an info block, zero padded. Runs inside the queue. */
+  async #writeInfoBlock(block: 1 | 2, data: Uint8Array): Promise<void> {
+    const id = infoReportId(block);
+    const padded = new Uint8Array(INFO_BLOCK_SIZE);
+    padded.set(data);
+    await this.#transfer("send", id, (t) => t.sendFeatureReport(id, padded));
+  }
+
+  /** Reads report 4. Runs inside the queue. */
+  async #readMode(): Promise<number> {
+    const data = await this.#transfer("get", REPORT.mode, (t) =>
+      t.receiveFeatureReport(REPORT.mode, REPORT_LENGTH[4]),
+    );
+    return data[0] ?? 0;
   }
 
   /** Reads report 6, undoing the flip if `inverted`. Runs inside the queue. */
