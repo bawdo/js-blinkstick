@@ -191,6 +191,18 @@ describe("webhid fromHIDDevice", () => {
   });
 });
 
+describe("webhid report framing", () => {
+  test("reads a name from a report 2 with ID plus length + 1 bytes", async () => {
+    const device = nanoDevice();
+    const raw = new Uint8Array(34);
+    raw[0] = 2;
+    raw.set(new TextEncoder().encode("nano"), 1);
+    device.reports.set(2, new DataView(raw.buffer));
+    const stick = await open({ hid: new FakeHID([device]).asHID });
+    expect(await stick.getName()).toBe("nano");
+  });
+});
+
 describe("webhid reconnect", () => {
   test("disconnect then connect of a same-named device reconnects", async () => {
     const before = squareDevice("desk");

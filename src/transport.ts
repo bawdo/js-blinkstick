@@ -30,18 +30,28 @@ export interface Backend<H> {
 }
 
 /**
- * Normalises a received report to data without the report ID. Some HID stacks
- * return the ID as byte 0, others do not.
+ * Normalises a received report to exactly `length` data bytes, without the
+ * report ID. Three shapes are accepted:
+ *
+ * - exactly `length` bytes: the stack stripped the ID, returned unchanged
+ *   (checked first, so a buffer of `length` bytes whose first byte happens to
+ *   equal the ID is still "no ID");
+ * - longer than `length` with the ID as byte 0: the ID is dropped and the
+ *   next `length` bytes are returned, ignoring any trailing bytes. Some
+ *   devices return more than the descriptor declares (seen on reports 2 and 3
+ *   in Chrome on macOS, which return ID plus 33 bytes against a declared 32);
+ * - anything else (shorter than `length`, or longer with a first byte that is
+ *   not the ID) throws.
  */
 export function stripReportId(
   reportId: number,
   length: number,
   bytes: Uint8Array,
 ): Uint8Array {
-  if (bytes.length === length + 1 && bytes[0] === reportId) {
-    return bytes.subarray(1);
-  }
   if (bytes.length === length) return bytes;
+  if (bytes.length > length && bytes[0] === reportId) {
+    return bytes.subarray(1, length + 1);
+  }
   throw new Error(
     `blinkstick: report ${reportId} expected ${length} bytes, got ${bytes.length}`,
   );
