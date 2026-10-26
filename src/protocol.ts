@@ -45,8 +45,8 @@ export function encodeFrame(colors: readonly Color[]): Uint8Array {
 /** Reads the first `count` LEDs out of report 6 data. */
 export function decodeFrame(data: Uint8Array, count: number): Color[] {
   return Array.from({ length: count }, (_, i) => ({
-    g: data[1 + i * 3] ?? 0,
     r: data[2 + i * 3] ?? 0,
+    g: data[1 + i * 3] ?? 0,
     b: data[3 + i * 3] ?? 0,
   }));
 }

@@ -41,3 +41,8 @@ describe("decodeFrame round trip", () => {
     });
   }
 });
+
+test("decodeFrame returns colours with keys in r, g, b order", () => {
+  const [first] = decodeFrame(encodeFrame([{ r: 255, g: 0, b: 0 }]), 1);
+  expect(Object.keys(first ?? {})).toEqual(["r", "g", "b"]);
+});

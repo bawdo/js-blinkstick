@@ -34,8 +34,18 @@ function describeError(error) {
   return `${error?.name ?? "Error"} ${code}${error?.message ?? String(error)}`;
 }
 
+/** Normalises a colour (any key order) to a fixed r, g, b shape; leaves other values alone. */
+function canon(v) {
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === "object" && "r" in v && "g" in v && "b" in v) {
+    return { r: v.r, g: v.g, b: v.b };
+  }
+  return v;
+}
+
+/** Deep equality that ignores colour key order. */
 function same(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 }
 
 /** Failures in the check now running. */
