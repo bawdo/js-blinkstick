@@ -54,6 +54,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:hardware": "BLINKSTICK_HARDWARE=1 vitest run test/hardware",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
@@ -78,6 +79,7 @@
     "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "^2.6.3",
     "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.5",
     "esbuild": "^0.28.2",
     "fast-check": "^4.10.2",
     "node-hid": "^3.4.0",
