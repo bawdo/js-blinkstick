@@ -7,5 +7,10 @@ export default defineConfig({
       "**/dist/**",
       ...(process.env.BLINKSTICK_HARDWARE ? [] : ["test/hardware/**"]),
     ],
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      reporter: ["text", "lcov"],
+    },
   },
 });
