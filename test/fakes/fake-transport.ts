@@ -22,6 +22,14 @@ export class FakeTransport implements Transport {
   fail = 0;
   /** Unplugged: every transfer rejects. */
   gone = false;
+  /**
+   * After a report 4 write is accepted, every transfer rejects for this many
+   * milliseconds of Date.now, as a real stick does while it writes EEPROM.
+   * Infinity means it never answers again.
+   */
+  busyAfterModeMs = 0;
+  /** Date.now before which transfers reject, set by a report 4 write. */
+  private busyUntil = 0;
   closed = false;
 
   sendFeatureReport(reportId: number, data: Uint8Array): Promise<void> {
@@ -30,6 +38,9 @@ export class FakeTransport implements Transport {
     if (failure) return Promise.reject(failure);
     this.reports.set(reportId, data.slice());
     if (reportId === REPORT.led) this.applyLed(data);
+    if (reportId === REPORT.mode && this.busyAfterModeMs > 0) {
+      this.busyUntil = Date.now() + this.busyAfterModeMs;
+    }
     return Promise.resolve();
   }
 
@@ -69,6 +80,7 @@ export class FakeTransport implements Transport {
 
   private failure(): Error | undefined {
     if (this.gone) return new Error("device unplugged");
+    if (Date.now() < this.busyUntil) return new Error("not responding");
     if (this.fail > 0) {
       this.fail--;
       return new Error("general error");

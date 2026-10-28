@@ -10,6 +10,10 @@ All notable changes to this project are recorded here. The format follows
 
 - The release workflow creates the GitHub release after publishing to npm, using the version's CHANGELOG section as the notes (`scripts/release-notes.sh`).
 
+### Fixed
+
+- `setMode` waits for the stick to answer again after writing the mode, typically 12 to 15 ms and at most 250 ms. A Nano or Square refuses transfers for that long while it stores the mode, and the call made straight after `setMode` (reading the mode back, writing an info block or name, or setting LEDs) used to fail, or reconnect, as if the stick had been unplugged. `setMode` reads report 4 every 5 ms, without retries or a reconnect, until it shows the new mode, and rejects with DISCONNECTED if it has not after 250 ms.
+
 ## [0.1.1] - 2026-10-26
 
 ### Changed

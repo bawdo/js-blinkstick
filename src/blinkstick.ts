@@ -48,8 +48,16 @@ export interface StickOptions<I extends BlinkStickInfo> {
   knownName?: string;
 }
 
-/** Covers the firmware being busy straight after a write, and flaky macOS sets. */
+/**
+ * Covers flaky macOS sets. The attempts run back to back, so they do not
+ * outlast the busy window after a mode write; setMode waits that out itself.
+ */
 const TRANSFER_ATTEMPTS = 3;
+
+/** How often setMode reads report 4 back while the stick is busy. */
+const MODE_POLL_MS = 5;
+/** How long setMode waits for the stick to answer again before giving up. */
+const MODE_WAIT_MS = 250;
 
 const INFO_BLOCK_SIZE = REPORT_LENGTH[2];
 /** Names live in info block 1, as the official BlinkStick tools do. */
@@ -338,6 +346,11 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
    * forbids `mode`, which is every mode on an unknown model. Skips the write
    * when the stick is already in `mode`. This writes EEPROM, which wears with
    * use, so call it once and not in a loop.
+   *
+   * The stick stops answering for a short time after the write, typically 12
+   * to 15 ms, while it stores the mode. This resolves only once it answers
+   * again with the new mode, and rejects with DISCONNECTED if it has not after
+   * 250 ms. The wait does not time out a single read that hangs.
    */
   async setMode(mode: Mode): Promise<void> {
     const byte = modeToByte(mode);
@@ -358,6 +371,7 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
       await this.#transfer("send", REPORT.mode, (t) =>
         t.sendFeatureReport(REPORT.mode, Uint8Array.of(byte)),
       );
+      await this.#awaitMode(byte);
     });
   }
 
@@ -441,6 +455,47 @@ export class BlinkStick<I extends BlinkStickInfo = BlinkStickInfo> {
       t.receiveFeatureReport(REPORT.mode, REPORT_LENGTH[4]),
     );
     return data[0] ?? 0;
+  }
+
+  /**
+   * Reads report 4 every MODE_POLL_MS until it shows `byte`, for up to
+   * MODE_WAIT_MS. Runs inside the queue, straight after a mode write. Reads go
+   * to the transport once each, never through #transfer, because the stick is
+   * expected to refuse them for a while and reconnecting would only tear down
+   * a healthy stick. Each sleep is followed by a read before the deadline is
+   * checked, so a timer throttled in a hidden tab still gets a read. Rejects
+   * with DISCONNECTED on timeout and leaves the transport in place, so the
+   * next call reconnects through #transfer if the stick has really gone.
+   */
+  async #awaitMode(byte: number): Promise<void> {
+    const start = Date.now();
+    let failure: unknown;
+    for (;;) {
+      await sleep(MODE_POLL_MS);
+      const transport = this.#transport;
+      if (transport === undefined) {
+        throw new Error("blinkstick: mode wait without a transport");
+      }
+      try {
+        const data = await transport.receiveFeatureReport(
+          REPORT.mode,
+          REPORT_LENGTH[4],
+        );
+        if (data[0] === byte) return;
+        failure = new Error(`mode read back as ${data[0] ?? 0}`);
+      } catch (error) {
+        failure = error;
+      }
+      if (Date.now() - start >= MODE_WAIT_MS) {
+        const cause = failure instanceof Error ? failure.message : failure;
+        throw this.#disconnected(
+          new Error(
+            `no answer ${MODE_WAIT_MS} ms after setting the mode: ${String(cause)}`,
+            { cause: failure },
+          ),
+        );
+      }
+    }
   }
 
   /** Reads report 6, undoing the flip if `inverted`. Runs inside the queue. */
