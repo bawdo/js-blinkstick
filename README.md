@@ -121,6 +121,20 @@ npm run test:browser   # local page for manual WebHID checks
 
 Automated tests must never write EEPROM on a real stick.
 
+## Verifying a release
+
+Every release from 0.1.1 has npm provenance, which `npm audit signatures` checks. Releases after
+0.1.3 also carry GitHub build provenance. To check that a tarball came from this repository's
+release workflow, with the [GitHub CLI](https://cli.github.com/):
+
+```sh
+npm pack @bawdo/blinkstick@0.1.4
+gh attestation verify bawdo-blinkstick-0.1.4.tgz --repo bawdo/js-blinkstick \
+  --signer-workflow bawdo/js-blinkstick/.github/workflows/release.yml
+```
+
+Swap in the version you are checking. [SECURITY.md](SECURITY.md) has the details.
+
 ## Versioning
 
 Releases follow [semantic versioning](https://semver.org/). Until 1.0.0 the API may change

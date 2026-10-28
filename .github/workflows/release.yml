@@ -61,10 +61,74 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Publishes the tarball the build job checked. It runs no repository code
-  # and installs nothing, so the OIDC token only ever meets npm itself.
-  publish:
+  # Makes SLSA build provenance for the tarball the build job checked and
+  # verifies it before anything is published, for the GitHub release. npm
+  # makes its own provenance at publish. There is no checkout and no Node:
+  # only first-party actions and the gh CLI that ships on the runner. This
+  # job's id-token cannot mint an npm credential because the npm trusted
+  # publisher names the npm environment and this job has none. If the
+  # publisher is ever recreated without an environment, that stops being
+  # true.
+  attest:
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+      # Attest exactly the tarball this tag should have produced, so a stray
+      # file in the artifact is never attested instead.
+      - name: Check the artifact holds only the expected tarball
+        id: tarball
+        run: |
+          file="bawdo-blinkstick-${GITHUB_REF_NAME#v}.tgz"
+          if [ ! -f "$file" ]; then
+            echo "::error::expected $file was not found"
+            exit 1
+          fi
+          for f in ./*.tgz; do
+            if [ "$f" != "./$file" ]; then
+              echo "::error::unexpected tarball $f"
+              exit 1
+            fi
+          done
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
+        with:
+          subject-path: ${{ steps.tarball.outputs.file }}
+      # A bundle that does not verify for this repository, workflow, tag and
+      # commit stops the release here, before publish starts.
+      - name: Verify the attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          file="bawdo-blinkstick-${GITHUB_REF_NAME#v}.tgz"
+          cp "$ATTESTATION_BUNDLE" "$file.sigstore.json"
+          gh attestation verify "$file" --bundle "$file.sigstore.json" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-ref "$GITHUB_REF" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: attestation
+          path: ${{ steps.tarball.outputs.file }}.sigstore.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # Publishes the tarball the build job checked, once the attest job has
+  # verified its provenance. It runs no repository code and installs
+  # nothing, so the OIDC token only ever meets npm itself.
+  publish:
+    needs: [build, attest]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The npm environment only accepts v* tags, and the npm trusted publisher
@@ -108,8 +172,9 @@ jobs:
           npm publish "./$file"
 
   # Creates the GitHub release once npm has the package, with the notes the
-  # build job extracted. There is no checkout and nothing is installed, so
-  # this job's write token reaches only the gh CLI that ships on the runner.
+  # build job extracted and the tarball and its attestation as assets. There
+  # is no checkout and nothing is installed, so this job's write token
+  # reaches only the gh CLI that ships on the runner.
   github-release:
     needs: publish
     runs-on: ubuntu-latest
@@ -120,18 +185,33 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-notes
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: attestation
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        # A published release for the tag, such as one made by hand, is left
-        # alone, so a re-run never overwrites it. gh does not see drafts, so
-        # a draft for the tag would get a second release beside it.
+        # A published release for the tag, such as one made by hand, is never
+        # overwritten: a re-run only uploads whichever of the tarball and
+        # attestation it is missing. gh does not see drafts, so a draft for
+        # the tag would get a second release beside it.
         run: |
           tag="$GITHUB_REF_NAME"
+          file="bawdo-blinkstick-${tag#v}.tgz"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "::notice::release $tag already exists, leaving it as it is"
+            existing="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+            for asset in "$file" "$file.sigstore.json"; do
+              if printf '%s\n' "$existing" | grep -qxF "$asset"; then
+                echo "::notice::release $tag already has $asset"
+              else
+                gh release upload "$tag" "$asset"
+              fi
+            done
             exit 0
           fi
           gh release create "$tag" --verify-tag --title "$tag" \
-            --notes-file release-notes.md
+            --notes-file release-notes.md "$file" "$file.sigstore.json"
