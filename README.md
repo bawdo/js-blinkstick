@@ -73,6 +73,8 @@ name, and marks sticks as `busy` when something else holds them or their name ca
 
 - `setInfoBlock`, `setName` and `setMode` write the stick's EEPROM, which wears out. Call them
   rarely. Nothing else writes it.
+- After a mode write the stick refuses transfers while it stores the mode, so `setMode` waits
+  for it to answer again (typically 12 to 15 ms, at most 250 ms) before it resolves.
 - macOS opens sticks exclusively. If another app (for example Chrome with the Blinky extension)
   holds a stick, `open` fails with "exclusive access".
 - npm 11 may warn that node-hid's install script was skipped. That is harmless: node-hid loads

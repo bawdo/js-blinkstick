@@ -8,6 +8,11 @@ Devices (serials): Nano BS072777-3.0 (release 0x0202), Square BS073788-3.1 (rele
 
 Nothing here writes EEPROM: no check calls `setInfoBlock`, `setName` or `setMode`.
 
+When checking `setMode` by hand: after a mode write the stick refuses transfers for about 12 to
+15 ms while it stores the mode. `setMode` waits that out (at most 250 ms) before resolving, so a
+check that writes the mode through the library can read it back straight away. A probe that
+sends report 4 directly has to wait itself.
+
 Mark each cell PASS, FAIL or SKIP, with a short note for anything other than PASS. Leave a cell
 empty if it was not run.
 
