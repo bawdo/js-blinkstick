@@ -6,7 +6,7 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.1.2] - 2026-10-29
+## [0.1.3] - 2026-10-29
 
 ### Added
 
@@ -15,6 +15,10 @@ All notable changes to this project are recorded here. The format follows
 ### Fixed
 
 - `setMode` waits for the stick to answer again after writing the mode, typically 12 to 15 ms and at most 250 ms. A Nano or Square refuses transfers for that long while it stores the mode, and the call made straight after `setMode` (reading the mode back, writing an info block or name, or setting LEDs) used to fail, or reconnect, as if the stick had been unplugged. `setMode` reads report 4 every 5 ms, without retries or a reconnect, until it shows the new mode, and rejects with DISCONNECTED if it has not after 250 ms.
+
+## [0.1.2] - 2026-10-29
+
+Tagged but never published: the release workflow failed before reaching npm. Its changes ship in 0.1.3.
 
 ## [0.1.1] - 2026-10-26
 
