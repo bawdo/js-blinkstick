@@ -6,6 +6,10 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Releases carry SLSA build provenance from GitHub as well as npm's. The release workflow attests the tarball with `actions/attest`, verifies the bundle for this repository, workflow, tag and commit before publishing, and attaches the tarball and its `.sigstore.json` to the GitHub release. README.md and SECURITY.md show how to check a release with `npm audit signatures` and `gh attestation verify`.
+
 ## [0.1.3] - 2026-10-29
 
 ### Added
