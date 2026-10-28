@@ -1,6 +1,6 @@
 {
   "name": "@bawdo/blinkstick",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Drive BlinkStick Nano and Square USB LEDs from the browser (WebHID) and Node (node-hid).",
   "keywords": [
     "blinkstick",
