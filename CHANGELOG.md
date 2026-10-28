@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-29
+
 ### Added
 
 - The release workflow creates the GitHub release after publishing to npm, using the version's CHANGELOG section as the notes (`scripts/release-notes.sh`).
