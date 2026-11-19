@@ -9,6 +9,7 @@ All notable changes to this project are recorded here. The format follows
 ### Changed
 
 - CI tests on Node 26 as well as 22 and 24, lets every matrix job finish when one fails, and no longer cancels runs on `main`. Pull requests also run GitHub's dependency review, which fails on a new dependency with a known moderate or worse vulnerability.
+- CodeQL runs from `.github/workflows/codeql.yml` instead of GitHub's default setup, which never analysed Dependabot pull requests and left them blocked on the required `Analyze` checks.
 
 ## [0.1.4] - 2026-10-29
 
