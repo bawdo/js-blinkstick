@@ -1,0 +1,50 @@
+# CodeQL code scanning, as an advanced setup. Default setup never analyses
+# pull requests that Dependabot opens or updates, so they could not pass the
+# required "Analyze (...)" checks. A pull_request run can always upload
+# results, Dependabot's included. Default setup must stay off: the two
+# cannot run side by side.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "41 3 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The job names must stay "Analyze (<language>)": the main ruleset requires
+  # them by name.
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          # The same categories default setup used, so existing alerts carry
+          # over instead of reopening as new ones.
+          category: /language:${{ matrix.language }}
