@@ -6,6 +6,10 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- CI tests on Node 26 as well as 22 and 24, lets every matrix job finish when one fails, and no longer cancels runs on `main`. Pull requests also run GitHub's dependency review, which fails on a new dependency with a known moderate or worse vulnerability.
+
 ## [0.1.4] - 2026-10-29
 
 ### Added

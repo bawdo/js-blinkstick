@@ -25,8 +25,10 @@ npm run check:bundle
 npm run check:types
 ```
 
-CI runs all of these on macOS and Linux with Node 22 and 24, and a pull
-request needs them to pass before it can merge.
+CI runs all of these on macOS and Linux with Node 22, 24 and 26, smoke
+tests the packed tarball, and reviews any new dependencies for known
+vulnerabilities. A pull request needs all of that to pass before it can
+merge.
 
 ## Hardware
 
