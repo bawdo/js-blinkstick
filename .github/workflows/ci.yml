@@ -8,17 +8,21 @@ on:
 permissions:
   contents: read
 
+# A newer push to a PR supersedes the older run, but every commit on main
+# keeps its own result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
+      # Let every cell finish so a failure shows which Node and OS it hits.
+      fail-fast: false
       matrix:
-        node: [22, 24]
+        node: [22, 24, 26]
         os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +55,17 @@ jobs:
       # script packs it.
       - run: npm run build
       - run: sh scripts/smoke-pack.sh
+
+  # Fails a PR that adds a dependency with a known moderate or worse
+  # vulnerability. PR only: it compares the PR's base and head.
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
 
   # Runs the unit suite once more with coverage and uploads it to Codecov.
   # A job of its own so the upload token is never in reach of the test
